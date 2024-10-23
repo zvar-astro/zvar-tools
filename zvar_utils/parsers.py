@@ -3,7 +3,7 @@ import os
 
 from zvar_utils.enums import ALLOWED_BANDS
 
-def candidates_parser():
+def candidates_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description='Run candidate detection on ZVAR results')
     parser.add_argument('--field_min', type=int, help='Field number on the low end of the range (inclusive)')
     parser.add_argument('--field_max', type=int, help='Field number on the high end of the range (inclusive)')
@@ -15,7 +15,7 @@ def candidates_parser():
 
     return parser
 
-def validate_candidates_args(args):
+def validate_candidates_args(args) -> argparse.Namespace:
     # FIELD_MIN
     try:
         args.field_min = int(args.field_min)

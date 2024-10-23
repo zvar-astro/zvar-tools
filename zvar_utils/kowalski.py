@@ -1,6 +1,6 @@
-from typing import List
-import os
 import json
+import os
+from typing import List, Tuple
 
 import numpy as np
 from penquins import Kowalski
@@ -96,7 +96,7 @@ def query_gaia(k: Kowalski, ids: List[int], ras: List[int], decs: List[int], rad
 
     return results
     
-def get_ipac_dr_lightcurves(k: Kowalski, ra: float, dec: float, min_epochs: int = 50):
+def get_ipac_dr_lightcurves(k: Kowalski, ra: float, dec: float, min_epochs: int = 50) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     if not isinstance(k, Kowalski):
         raise ValueError('Kowalski must be an instance of the Kowalski class')
     if not isinstance(ra, (int, float)):

@@ -1,3 +1,5 @@
+from typing import Tuple
+
 import numpy as np
 from astropy import coordinates as coord
 from astropy import units as u
@@ -5,7 +7,7 @@ from astropy.time import Time
 
 from zvar_utils.stats import median_abs_deviation
 
-def process_curve(ra, dec, times, mags, magerrs):
+def process_curve(ra: float, dec: float, times: list, mags: list, magerrs: list) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     times = np.array(times)
     mags = np.array(mags)
     magerrs = np.array(magerrs)
@@ -50,7 +52,7 @@ def process_curve(ra, dec, times, mags, magerrs):
     return barycorr_times, flux, ferrs
 
 
-def remove_deep_drilling(barycorr_times, flux, ferrs):
+def remove_deep_drilling(barycorr_times: np.ndarray, flux: np.ndarray, ferrs: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     dt = 40.0  # seconds
     znew_times, znew_flux, znew_ferrs = [], [], []
 
@@ -91,7 +93,7 @@ def remove_deep_drilling(barycorr_times, flux, ferrs):
 
     return znew_times, znew_flux, znew_ferrs
 
-def freq_grid(t, fmin=None, fmax=None, oversample=3):
+def freq_grid(t: np.ndarray, fmin: float = None, fmax: float = None, oversample: int = 3) -> np.ndarray:
     trange = max(t) - min(t)
     texp = np.nanmin(np.diff(np.sort(t)))
     fres = 1./trange/oversample
@@ -102,7 +104,7 @@ def freq_grid(t, fmin=None, fmax=None, oversample=3):
     fgrid = np.arange(fmin,fmax,fres)
     return fgrid
 
-def flag_terrestrial_freq(frequencies):
+def flag_terrestrial_freq(frequencies: np.ndarray) -> np.ndarray:
     """
     Function to identify and flag terrestrial frequencies
     from an array of frequency values.

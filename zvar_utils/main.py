@@ -1,5 +1,4 @@
 import numpy as np
-import glob as glob
 
 from zvar_utils.candidate import get_candidates, save_candidates_to_csv, add_gaia_xmatch_to_candidates
 from zvar_utils.kowalski import connect_to_kowalski

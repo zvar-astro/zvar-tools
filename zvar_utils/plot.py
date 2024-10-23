@@ -1,10 +1,11 @@
 import os
 from typing import List
+
 import matplotlib.pyplot as plt
-from matplotlib.gridspec import GridSpec
-from matplotlib.colors import LogNorm
 import numpy as np
 from astropy.table import Table
+from matplotlib.colors import LogNorm
+from matplotlib.gridspec import GridSpec
 
 from zvar_utils.candidate import VariabilityCandidate
 from zvar_utils.enums import ALLOWED_BANDS
@@ -124,7 +125,7 @@ def plot_lightcurve(candidate: VariabilityCandidate, time, flux, fluxerr, figsiz
 
     plt.close()
 
-def plot_periodicity(candidate, time, flux, fluxerr, pgram, best_period, show_plot=True):
+def plot_periodicity(candidate: VariabilityCandidate, time: np.ndarray, flux: np.ndarray, fluxerr: np.ndarray, pgram: np.ndarray, best_period: float, show_plot: bool = True):
     fgrid = freq_grid(time)
     
     phase = (time / best_period) % 2
