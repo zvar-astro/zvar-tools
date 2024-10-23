@@ -7,6 +7,8 @@ import argparse
 from astropy.coordinates import SkyCoord, match_coordinates_sky
 from astropy import units as u
 from astroquery.gaia import Gaia
+import json
+from penquins import Kowalski
 
 
 class VariabilityCandidate:
@@ -22,14 +24,24 @@ class VariabilityCandidate:
         self.gaia_BP = None
         self.gaia_RP = None
         self.gaia_parallax = None
+        self.gaia_parallax_error = None
+        self.gaia_pmra = None
+        self.gaia_pmra_error = None
+        self.gaia_pmdec = None
+        self.gaia_pmdec_error = None
         self.gaia_MG = None
         self.gaia_BP_RP = None
 
-    def set_gaia(self, G, BP, RP, parallax):
+    def set_gaia(self, G, BP, RP, parallax, parallax_error, pmra, pmra_error, pmdec, pmdec_error):
         self.gaia_G = G
         self.gaia_BP = BP
         self.gaia_RP = RP
         self.gaia_parallax = parallax
+        self.gaia_parallax_error = parallax_error
+        self.gaia_pmra = pmra
+        self.gaia_pmra_error = pmra_error
+        self.gaia_pmdec = pmdec
+        self.gaia_pmdec_error = pmdec_error
 
     def find_gaia_MG(self):
         if self.gaia_G is not None and self.gaia_parallax is not None:
@@ -53,14 +65,14 @@ def load_field_data(field, band):
     ra = np.array([])
     dec = np.array([])
     for file in files:
-        dataset = h5.File(file, 'r')
-        psids = np.append(psids, np.array(dataset['psids']))
-        ratio_valid = np.append(ratio_valid, np.array(dataset['valid']))
-        best_freqs = np.append(best_freqs, np.array(dataset['bestFreqs']))
-        significances = np.append(significances, np.array(dataset['significance']))
-        ra = np.append(ra, np.array(dataset['ra']))
-        dec = np.append(dec, np.array(dataset['dec']))
-        print(f'Loaded {file}')
+        with h5.File(file, 'r') as dataset:
+            psids = np.append(psids, np.array(dataset['psids']))
+            ratio_valid = np.append(ratio_valid, np.array(dataset['valid']))
+            best_freqs = np.append(best_freqs, np.array(dataset['bestFreqs']))
+            significances = np.append(significances, np.array(dataset['significance']))
+            ra = np.append(ra, np.array(dataset['ra']))
+            dec = np.append(dec, np.array(dataset['dec']))
+            print(f'Loaded {file}')
     freqs = best_freqs.reshape((len(psids), 3, 50))
     sigs = significances.reshape((len(psids), 3, 50))
     sigs_clean = np.nan_to_num(sigs, nan=0, posinf=0, neginf=0)
@@ -92,18 +104,22 @@ def find_extrema(data, cdf_value=0.999):
 
 
 def parse_candidates(psids, ra, dec, ratio_valid, freqs, sigs):
-    # Find the indices of the candidates for different bins
+    # Precompute the CDFs for each bin
+    cdfs = [calculate_cdf(sigs[:, j, 0]) for j in range(3)]
+    
     extrema_20 = find_extrema(sigs[:, 0, 0], 0.999)
+    print(f'Found {np.sum(extrema_20)} candidates in the 20-day bin')
     extrema_10 = find_extrema(sigs[:, 1, 0], 0.999)
+    print(f'Found {np.sum(extrema_10)} candidates in the 10-day bin')
     extrema_5 = find_extrema(sigs[:, 2, 0], 0.999)
+    print(f'Found {np.sum(extrema_5)} candidates in the 5-day bin')
     combined_candidates = np.logical_or.reduce([extrema_20, extrema_10, extrema_5])
+    print(f'Found {np.sum(combined_candidates)} combined candidates')
     
     candidate_list = []
     bins = [20, 10, 5]
     for i in range(len(psids)):
         if combined_candidates[i]:
-            # Calculate CDF for each sigs[:, j, 0]
-            cdfs = [calculate_cdf(sigs[:, j, 0]) for j in range(3)]
             # Find the probability of the 0th value in each bin
             probabilities = []
             for j in range(3):
@@ -119,7 +135,6 @@ def parse_candidates(psids, ra, dec, ratio_valid, freqs, sigs):
             # Determine which bin value is the least likely to have arisen from random chance
             min_prob_index = np.argmin(probabilities)
             min_prob_value = probabilities[min_prob_index]
-
             # Determine the best bin
             best_M = bins[min_prob_index]
             
@@ -128,65 +143,81 @@ def parse_candidates(psids, ra, dec, ratio_valid, freqs, sigs):
     
     return candidate_list
 
+def query_gaia(k, candidate_list, radius):
 
-def construct_adql_query(coords, radius=0.001):
-    query = """
-    SELECT
-        source_id, ra, dec, phot_g_mean_mag, phot_bp_mean_mag, phot_rp_mean_mag, parallax
-    FROM gaiadr2.gaia_source
-    WHERE """
+    #Extract the psids, ras, and decs from the candidate list
+    psids = [candidate.id for candidate in candidate_list]
+    ras = [candidate.ra for candidate in candidate_list]
+    decs = [candidate.dec for candidate in candidate_list]
+
+    #Create a list of tuples of (psid, ra, dec) for each source
+    inputs = []
+    for i in range(len(psids)):
+        inputs.append((psids[i], ras[i], decs[i]))
+
+    #Create batches of 1000 sources
+    batch_size = 1000
+    batches = [inputs[i:i + batch_size] for i in range(0, len(inputs), batch_size)]
+
+    queries = []
+    for batch in batches:
+        #Create a list of dictionaries for each source
+        query = {
+            "query_type": "near",
+            "query": {
+                "max_distance": radius,
+                "distance_units": "arcsec",
+                "radec": {
+                    str(psid): [float(ra), float(dec)] for psid, ra, dec in batch
+                },
+                "catalogs": {
+                    "Gaia_EDR3": {
+                        "filter": {},
+                        "projection": {
+                            'pmra': 1,
+                            'pmra_error': 1,
+                            'pmdec': 1,
+                            'pmdec_error': 1,
+                            'parallax': 1,
+                            'parallax_error': 1,
+                            'phot_g_mean_mag': 1,
+                            'phot_bp_mean_mag': 1,
+                            'phot_rp_mean_mag': 1
+                        }
+                    }
+                }
+            },
+            "kwargs": {
+                "limit": 1
+            }
+        }
+        queries.append(query)
+
+    responses = k.query(queries = queries, use_batch_query=True, max_n_threads=30)
+    responses = responses.get("default")
+
+    results = {}
+    for response in responses:
+        for psid, result in response.get("data").get("Gaia_EDR3").items():
+            results[psid] = result
+    #Fill in the Gaia data for each candidate
+    for candidate in candidate_list:
+        result = results[str(candidate.id)]
+        if result: #If Gaia found anything
+            result = result[0] #It comes in a list of one element
+            pmra = result['pmra'] if 'pmra' in result else None
+            pmra_error = result['pmra_error'] if 'pmra_error' in result else None
+            pmdec = result['pmdec'] if 'pmdec' in result else None
+            pmdec_error = result['pmdec_error'] if 'pmdec_error' in result else None
+            parallax = result['parallax'] if 'parallax' in result else None
+            parallax_error = result['parallax_error'] if 'parallax_error' in result else None
+            G = result['phot_g_mean_mag'] if 'phot_g_mean_mag' in result else None
+            BP = result['phot_bp_mean_mag'] if 'phot_bp_mean_mag' in result else None
+            RP = result['phot_rp_mean_mag'] if 'phot_rp_mean_mag' in result else None
+            candidate.set_gaia(G, BP, RP, parallax, parallax_error, pmra, pmra_error, pmdec, pmdec_error)
+        candidate.find_gaia_MG()
+        candidate.find_gaia_BP_RP()
     
-    conditions = []
-    for coord in coords:
-        conditions.append(f"CONTAINS(POINT('ICRS', ra, dec), CIRCLE('ICRS', {coord.ra.deg}, {coord.dec.deg}, {radius})) = 1")
-    
-    query += " OR ".join(conditions)
-    return query
-
-
-def process_chunk(chunk):
-    coord = [SkyCoord(ra=candidate.ra, dec=candidate.dec, unit=(u.deg, u.deg), frame='icrs') for candidate in chunk]
-
-    # Construct the ADQL query
-    query = construct_adql_query(coord)
-    job = Gaia.launch_job_async(query)
-    results = job.get_results().to_pandas()
-
-    tolerance = 5 * u.arcsec
-    for candidate in chunk:
-        candidate_coord = SkyCoord(ra=candidate.ra, dec=candidate.dec, unit=(u.deg, u.deg), frame='icrs')
-        result_coords = SkyCoord(ra=results['ra'].values * u.deg, dec=results['dec'].values * u.deg, frame='icrs')
-        
-        idx, sep2d, _ = match_coordinates_sky(candidate_coord, result_coords)
-        
-        if sep2d < tolerance:
-            match = results.iloc[idx]
-            if not (np.isnan(match['parallax']) or (match['parallax'] < 0)):
-                candidate.set_gaia(
-                    G=match['phot_g_mean_mag'],
-                    BP=match['phot_bp_mean_mag'],
-                    RP=match['phot_rp_mean_mag'],
-                    parallax=match['parallax']
-                )
-            else:
-                candidate.set_gaia(
-                    G=match['phot_g_mean_mag'],
-                    BP=match['phot_bp_mean_mag'],
-                    RP=match['phot_rp_mean_mag'],
-                    parallax=None
-                )
-            candidate.find_gaia_MG()
-            candidate.find_gaia_BP_RP()
-
-
-def query_gaia(candidate_list):
-    chunk_size = 1000000
-    if len(candidate_list) > chunk_size:
-        for i in range(0, len(candidate_list), chunk_size):
-            chunk = candidate_list[i:i + chunk_size]
-            process_chunk(chunk)
-    else:
-        process_chunk(candidate_list)
 
 
 def write_csv(candidate_list, field, band):
@@ -203,6 +234,11 @@ def write_csv(candidate_list, field, band):
         gaia_BP = candidate.gaia_BP
         gaia_RP = candidate.gaia_RP
         gaia_parallax = candidate.gaia_parallax
+        gaia_parallax_error = candidate.gaia_parallax_error
+        gaia_pmra = candidate.gaia_pmra
+        gaia_pmra_error = candidate.gaia_pmra_error
+        gaia_pmdec = candidate.gaia_pmdec
+        gaia_pmdec_error = candidate.gaia_pmdec_error
         gaia_MG = candidate.gaia_MG
         gaia_BP_RP = candidate.gaia_BP_RP
         
@@ -222,6 +258,11 @@ def write_csv(candidate_list, field, band):
             'BP': gaia_BP,
             'RP': gaia_RP,
             'parallax': gaia_parallax,
+            'parallax_error': gaia_parallax_error,
+            'pmra': gaia_pmra,
+            'pmra_error': gaia_pmra_error,
+            'pmdec': gaia_pmdec,
+            'pmdec_error': gaia_pmdec_error,
             'MG': gaia_MG,
             'BP_RP': gaia_BP_RP
         })
@@ -247,8 +288,25 @@ if __name__ == "__main__":
     parser.add_argument('field2', type=int, help='Field number on the high end of the range (inclusive)')
 
     args = parser.parse_args()
-    bands = ['g', 'r']
 
+    #Connect to Kowalski
+    credentials = "/data/swhitebook/passwd.json"
+    with open(credentials) as f:
+        passwd = json.load(f)
+    username = passwd["melman"]["username"]
+    password = passwd["melman"]["password"]
+
+    k = Kowalski(
+    protocol="https",
+    host="melman.caltech.edu",
+    port=443,
+    username=username,
+    password=password,
+    verbose=True,
+    timeout=600,
+    )
+
+    bands = ['g', 'r']
     fields = np.arange(args.field1, args.field2 + 1)
     #convert every folder to a string and zfill it to 4 digits
     fields = [str(field).zfill(4) for field in fields]
@@ -257,5 +315,5 @@ if __name__ == "__main__":
         for band in bands:
             psids, ra, dec, ratio_valid, freqs, sigs_clean = load_field_data(field, band) #Load the data
             candidate_list = parse_candidates(psids, ra, dec, ratio_valid, freqs, sigs_clean) #Find the candidates
-            query_gaia(candidate_list) #Fill in the Gaia data
+            query_gaia(k, candidate_list, 5) #Fill in the Gaia data
             write_csv(candidate_list, field, band) #Write the candidates to a CSV file
