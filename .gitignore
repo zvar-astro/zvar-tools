@@ -1,3 +1,6 @@
+.DS_Store
 __pycache__/
 credentials.json
 data/variability_candidates/
+FPW_Wheels.zip
+**.whl
