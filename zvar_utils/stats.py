@@ -1,5 +1,6 @@
 import numpy as np
-from scipy.stats import median_abs_deviation # noqa: F401
+from scipy.stats import median_abs_deviation  # noqa: F401
+
 
 def calculate_cdf(data: np.ndarray) -> np.ndarray:
     # Filter data to include only values greater than 0
