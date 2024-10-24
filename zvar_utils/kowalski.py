@@ -1,11 +1,8 @@
 import json
 import os
-from typing import List, Tuple
+from typing import List
 
-import numpy as np
 from penquins import Kowalski
-
-from zvar_utils.photometry import process_curve, remove_deep_drilling
 
 
 def connect_to_kowalski(path_credentials: str, verbose: bool = True) -> Kowalski:
@@ -95,96 +92,3 @@ def query_gaia(
             results[id] = result
 
     return results
-
-
-def get_ipac_dr_lightcurves(
-    k: Kowalski, ra: float, dec: float, min_epochs: int = 50
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    if not isinstance(k, Kowalski):
-        raise ValueError("Kowalski must be an instance of the Kowalski class")
-    if not isinstance(ra, (int, float)):
-        raise ValueError("RA must be a number")
-    if not isinstance(dec, (int, float)):
-        raise ValueError("Dec must be a number")
-    if ra < 0 or ra > 360:
-        raise ValueError("RA must be between 0 and 360")
-    if dec < -90 or dec > 90:
-        raise ValueError("Dec must be between -90 and 90")
-    if not isinstance(min_epochs, int):
-        raise ValueError("Min epochs must be an integer")
-    if min_epochs < 1:
-        raise ValueError("Min epochs must be greater than 0")
-
-    query = {
-        "query_type": "cone_search",
-        "query": {
-            "object_coordinates": {
-                "cone_search_radius": 5,
-                "cone_search_unit": "arcsec",
-                "radec": {"object": [ra, dec]},
-            },
-            "catalogs": {
-                "ZTF_sources_20240117": {
-                    "filter": {},
-                    "projection": {
-                        "data.hjd": 1,
-                        "data.mag": 1,
-                        "data.magerr": 1,
-                        "data.ra": 1,
-                        "data.dec": 1,
-                        "data.fid": 1,
-                        "data.programid": 1,
-                        "data.catflags": 1,
-                        "filter": 1,
-                    },
-                }
-            },
-        },
-        "kwargs": {"filter_first": False},
-    }
-
-    response = k.query(query=query).get("default")
-    if response.get("status") != "success":
-        print(f'Query failed with error: {response.get("message")}')
-        return None
-
-    data = response.get("data")
-
-    key = list(data.keys())[0]
-    data = data[key]
-    key = list(data.keys())[0]
-    data = data[key]
-    lightcurves = {}
-    num_epochs = 0
-    for datlist in data:
-        objid = str(datlist["_id"])
-        # print(datlist)
-        ztf_filter = datlist["filter"]
-        dat = datlist["data"]
-        hjd, mag, magerr, coords_out, ztf_id, ztf_filt = [], [], [], [], [], []
-        for dic in dat:
-            if dic["catflags"] == 0:
-                hjd.append(dic["hjd"])
-                mag.append(dic["mag"])
-                magerr.append(dic["magerr"])
-            coords_out.append(dic["ra"])
-            coords_out.append(dic["dec"])
-            ztf_id.append(objid)
-            ztf_filt.append(ztf_filter)
-        if len(hjd) < min_epochs:
-            continue
-        if len(hjd) > num_epochs:
-            num_epochs = len(hjd)
-            lightcurves["hjd"] = np.array(hjd)
-            lightcurves["mag"] = np.array(mag)
-            lightcurves["magerr"] = np.array(magerr)
-            lightcurves["coords"] = np.array(coords_out)
-            lightcurves["objid"] = objid
-            lightcurves["filter"] = ztf_filter
-
-        barycorr_times, flux, ferrs = process_curve(
-            ra, dec, lightcurves["hjd"], lightcurves["mag"], lightcurves["magerr"]
-        )
-        barycorr_times, flux, ferrs = remove_deep_drilling(barycorr_times, flux, ferrs)
-
-        return barycorr_times, flux, ferrs

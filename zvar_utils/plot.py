@@ -9,7 +9,7 @@ from matplotlib.gridspec import GridSpec
 
 from zvar_utils.candidate import VariabilityCandidate
 from zvar_utils.enums import ALLOWED_BANDS
-from zvar_utils.photometry import freq_grid
+from zvar_utils.lightcurves import freq_grid
 
 MARKER_STYLES = {5: ("s", 20), 10: ("o", 20), 20: ("*", 35)}
 
@@ -184,13 +184,14 @@ def plot_periodicity(
     pgram: np.ndarray,
     best_period: float,
     show_plot: bool = True,
+    figsize: tuple = (12, 14),
 ):
     fgrid = freq_grid(time)
 
     phase = (time / best_period) % 2
 
     # we plot all 3 plots above in a row of 3 subplots
-    fig, axs = plt.subplots(3, 1, figsize=(12, 14))
+    fig, axs = plt.subplots(3, 1, figsize=figsize)
 
     # plot the lightcurve
     axs[0].errorbar(time, flux, yerr=fluxerr, fmt="o")
