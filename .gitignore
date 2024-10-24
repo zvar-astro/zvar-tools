@@ -4,3 +4,4 @@ credentials.json
 data/variability_candidates/
 FPW_Wheels.zip
 **.whl
+data_**.h5

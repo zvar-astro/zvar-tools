@@ -3,3 +3,5 @@ pandas
 astropy
 penquins
 pre-commit
+paramiko
+scp
