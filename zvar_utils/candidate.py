@@ -18,6 +18,7 @@ class VariabilityCandidate:
         freq,
         fap,
         best_M,
+        gaia_id=None,
         gaia_G=None,
         gaia_BP=None,
         gaia_RP=None,
@@ -37,6 +38,7 @@ class VariabilityCandidate:
         self.freq = freq
         self.fap = fap
         self.best_M = best_M
+        self.gaia_id = gaia_id
         self.gaia_G = gaia_G
         self.gaia_BP = gaia_BP
         self.gaia_RP = gaia_RP
@@ -50,8 +52,19 @@ class VariabilityCandidate:
         self.gaia_BP_RP = gaia_BP_RP
 
     def set_gaia(
-        self, G, BP, RP, parallax, parallax_error, pmra, pmra_error, pmdec, pmdec_error
+        self,
+        id,
+        G,
+        BP,
+        RP,
+        parallax,
+        parallax_error,
+        pmra,
+        pmra_error,
+        pmdec,
+        pmdec_error,
     ):
+        self.gaia_id = id
         self.gaia_G = G
         self.gaia_BP = BP
         self.gaia_RP = RP
@@ -64,8 +77,14 @@ class VariabilityCandidate:
 
     def find_gaia_MG(self):
         if self.gaia_G is not None and self.gaia_parallax is not None:
-            self.gaia_MG = self.gaia_G + 5 * np.log10(self.gaia_parallax / 1000) + 5
-            # self.gaia_MG = self.gaia_G - 5 * (1 - self.gaia_parallax / 1000)
+            if (
+                self.gaia_parallax / 1000 <= 0
+                or np.isnan(self.gaia_parallax)
+                or self.gaia_parallax is None
+            ):
+                self.gaia_MG = None
+            else:
+                self.gaia_MG = self.gaia_G + 5 * np.log10(self.gaia_parallax / 1000) + 5
 
     def find_gaia_BP_RP(self):
         if self.gaia_BP is not None and self.gaia_RP is not None:
@@ -151,6 +170,7 @@ def add_gaia_xmatch_to_candidates(
         result = results[str(candidate.id)]
         if result:  # If Gaia found anything
             result = result[0]  # It comes in a list of one element
+            gaia_id = result["_id"] if "_id" in result else None
             pmra = result["pmra"] if "pmra" in result else None
             pmra_error = result["pmra_error"] if "pmra_error" in result else None
             pmdec = result["pmdec"] if "pmdec" in result else None
@@ -163,6 +183,7 @@ def add_gaia_xmatch_to_candidates(
             BP = result["phot_bp_mean_mag"] if "phot_bp_mean_mag" in result else None
             RP = result["phot_rp_mean_mag"] if "phot_rp_mean_mag" in result else None
             candidate.set_gaia(
+                gaia_id,
                 G,
                 BP,
                 RP,
@@ -209,6 +230,7 @@ def save_candidates_to_csv(
                 "FAP_20": candidate.fap[0],
                 "FAP_10": candidate.fap[1],
                 "FAP_5": candidate.fap[2],
+                "gaia_id": candidate.gaia_id,
                 "G": candidate.gaia_G,
                 "BP": candidate.gaia_BP,
                 "RP": candidate.gaia_RP,
