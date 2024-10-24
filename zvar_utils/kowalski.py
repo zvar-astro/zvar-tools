@@ -63,6 +63,7 @@ def query_gaia(
                     "Gaia_EDR3": {
                         "filter": {},
                         "projection": {
+                            "_id": 1,
                             "pmra": 1,
                             "pmra_error": 1,
                             "pmdec": 1,
@@ -72,6 +73,8 @@ def query_gaia(
                             "phot_g_mean_mag": 1,
                             "phot_bp_mean_mag": 1,
                             "phot_rp_mean_mag": 1,
+                            "ra": 1,
+                            "dec": 1,
                         },
                     }
                 },
