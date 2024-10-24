@@ -17,7 +17,7 @@ def load_field_periodicity_data(
         raise ValueError("Path must be specified")
 
     path = os.path.join(
-        os.path.abspath(path), f"{str(field).zfill(4)}", f"*_z{band}.h5"
+        os.path.abspath(path), f"{str(field).zfill(4)}", f"fpw_*_z{band}.h5"
     )
 
     files = glob.glob(path)
