@@ -125,29 +125,6 @@ def read_lightcurves(ids_per_files, local_path):
     return all_photometry
 
 
-def retrieve_objs_lightcurve(
-    objs, path_lc, ssh_client: paramiko.SSHClient = None, remote_path_lc=None
-):
-    # get files for each object
-    ids_per_file = {}
-    for psid, ra, dec in objs:
-        files = get_files_list(ra, dec)
-        for file in files:
-            if file not in ids_per_file:
-                ids_per_file[file] = set()
-            ids_per_file[file].add(psid)
-
-    # download files, and remove files that are not available
-    available_files = get_files(
-        list(ids_per_file.keys()), path_lc, ssh_client, remote_path_lc
-    )
-    for file in list(ids_per_file.keys()):
-        if file not in available_files:
-            del ids_per_file[file]
-
-    return read_lightcurves(ids_per_file, path_lc)
-
-
 def get_ssh_client(host, username=None, password=None, pkey_path=None):
     """
     Create an scp client

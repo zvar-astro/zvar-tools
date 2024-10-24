@@ -1,11 +1,13 @@
 from typing import Tuple
 
 import numpy as np
+import paramiko
 from astropy import coordinates as coord
 from astropy import units as u
 from astropy.time import Time
 
 from zvar_utils.stats import median_abs_deviation
+from zvar_utils.files import get_files_list, get_files, read_lightcurves
 
 
 def process_curve(
@@ -167,3 +169,26 @@ def flag_terrestrial_freq(frequencies: np.ndarray) -> np.ndarray:
         keep_freq[mask] = 0
 
     return keep_freq
+
+
+def retrieve_objs_lightcurve(
+    objs, path_lc, ssh_client: paramiko.SSHClient = None, remote_path_lc=None
+):
+    # get files for each object
+    ids_per_file = {}
+    for psid, ra, dec in objs:
+        files = get_files_list(ra, dec)
+        for file in files:
+            if file not in ids_per_file:
+                ids_per_file[file] = set()
+            ids_per_file[file].add(psid)
+
+    # download files, and remove files that are not available
+    available_files = get_files(
+        list(ids_per_file.keys()), path_lc, ssh_client, remote_path_lc
+    )
+    for file in list(ids_per_file.keys()):
+        if file not in available_files:
+            del ids_per_file[file]
+
+    return read_lightcurves(ids_per_file, path_lc)
