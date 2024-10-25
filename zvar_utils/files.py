@@ -7,12 +7,20 @@ from zvar_utils.enums import FILTERS
 from zvar_utils.spatial import get_field_id
 
 
-def get_files_list(ra, dec, prefix="data", bands=FILTERS):
+def get_files_list(ra, dec, prefix="data", bands=FILTERS, limit_fields=None):
+    if isinstance(limit_fields, list):
+        limit_fields = list({int(f) for f in limit_fields})
     if not set(bands).issubset(FILTERS):
         raise ValueError(f"Allowed bands are {FILTERS}, got {bands}")
     field_ccd_quads = get_field_id(ra, dec)
     files_list = []
     for field, ccd, quad in field_ccd_quads:
+        if (
+            isinstance(limit_fields, list)
+            and len(limit_fields) > 0
+            and int(field) not in limit_fields
+        ):
+            continue
         field = f"{field:04d}"
         ccd = f"{ccd:02d}"
         quad = f"{quad:01d}"

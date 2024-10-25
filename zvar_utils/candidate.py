@@ -164,12 +164,15 @@ def add_gaia_xmatch_to_candidates(
     ras = [candidate.ra for candidate in candidate_list]
     decs = [candidate.dec for candidate in candidate_list]
 
-    results = query_gaia(k, psids, ras, decs, radius)
+    xmatches = query_gaia(k, psids, ras, decs, radius)
+    # print how many sources have gaia matches
+    print(
+        f"Found {len([x for x in xmatches.values() if x is not None])} Gaia matches, out of {len(candidate_list)} sources"
+    )
     # Fill in the Gaia data for each candidate
     for candidate in candidate_list:
-        result = results[str(candidate.id)]
+        result = xmatches.get(candidate.id)
         if result:  # If Gaia found anything
-            result = result[0]  # It comes in a list of one element
             gaia_id = result["_id"] if "_id" in result else None
             pmra = result["pmra"] if "pmra" in result else None
             pmra_error = result["pmra_error"] if "pmra_error" in result else None
