@@ -37,7 +37,7 @@ def candidates_parser() -> argparse.ArgumentParser:
         "--output_path", type=str, help="Output directory for the CSV files"
     )
     parser.add_argument(
-        "--credentials",
+        "--credentials_path",
         type=str,
         help="Path to the JSON file with the Kowalski credentials",
     )
@@ -81,9 +81,9 @@ def validate_candidates_args(args) -> argparse.Namespace:
         raise ValueError(f"Output path {args.output_path} does not exist")
 
     # CREDENTIALS
-    if args.credentials is None:
+    if args.credentials_path is None:
         raise ValueError("Credentials file must be specified")
-    if not os.path.exists(args.credentials):
-        raise ValueError(f"Credentials file {args.credentials} does not exist")
+    if not os.path.exists(args.credentials_path):
+        raise ValueError(f"Credentials file {args.credentials_path} does not exist")
 
     return args
