@@ -2,7 +2,7 @@ import glob
 import os
 from typing import Tuple
 
-import h5py as h5
+import h5py
 import numpy as np
 
 
@@ -34,14 +34,35 @@ def load_field_periodicity_data(
     ra = np.array([])
     dec = np.array([])
     for file in files:
-        with h5.File(file, "r") as dataset:
-            psids = np.append(psids, np.array(dataset["psids"]))
-            ratio_valid = np.append(ratio_valid, np.array(dataset["valid"]))
-            best_freqs = np.append(best_freqs, np.array(dataset["bestFreqs"]))
-            significances = np.append(significances, np.array(dataset["significance"]))
-            ra = np.append(ra, np.array(dataset["ra"]))
-            dec = np.append(dec, np.array(dataset["dec"]))
-        print(f"Loaded {file}")
+        if not os.path.isfile(file):
+            print(f"File {file} not found")
+            continue
+        try:
+            with h5py.File(file, "r") as dataset:
+                psids = np.append(psids, np.array(dataset["psids"]))
+                ratio_valid = np.append(ratio_valid, np.array(dataset["valid"]))
+                best_freqs = np.append(best_freqs, np.array(dataset["bestFreqs"]))
+                significances = np.append(
+                    significances, np.array(dataset["significance"])
+                )
+                ra = np.append(ra, np.array(dataset["ra"]))
+                dec = np.append(dec, np.array(dataset["dec"]))
+                print(f"Loaded {file}")
+        except FileNotFoundError:
+            print(f"File {file} not found")
+            continue
+        except OSError:
+            print(f"Error reading file {file}")
+            continue
+        except KeyError as e:
+            print(f"Key not found in file {file}: {e}")
+            continue
+        except Exception as e:
+            print(f"Error reading file {file}: {e}")
+            continue
+
+    if len(psids) == 0:
+        raise ValueError("No data found in files")
 
     freqs = best_freqs.reshape((len(psids), 3, 50))
     sigs = significances.reshape((len(psids), 3, 50))

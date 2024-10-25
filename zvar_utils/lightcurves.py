@@ -160,75 +160,89 @@ def read_lightcurves(ids_per_files, local_path):
     for file in all_files:
         ids = ids_per_files[file]
         file_path = f"{local_path}/{file}"
-        # print(f'Reading {file_path}')
+
         if not os.path.isfile(file_path):
             print(f"File {file_path} does not exist")
             continue
-        with h5py.File(file_path, "r") as f:
-            data = f["data"]
-            sources = data["sources"]
+        try:
+            with h5py.File(file_path, "r") as f:
+                data = f["data"]
+                sources = data["sources"]
 
-            sources_data = data["sourcedata"]
-            exposures = data["exposures"]
+                sources_data = data["sourcedata"]
+                exposures = data["exposures"]
 
-            for id in ids:
-                idx = np.where(sources["gaia_id"] == id)[0]
-                if not idx:
-                    continue
-                idx = idx[0]
+                for id in ids:
+                    idx = np.where(sources["gaia_id"] == id)[0]
+                    if not idx:
+                        continue
+                    idx = idx[0]
 
-                rows = exposures.shape[0]
-                start, end = idx * rows, (idx + 1) * rows
+                    rows = exposures.shape[0]
+                    start, end = idx * rows, (idx + 1) * rows
 
-                raw_photometry = sources_data[start:end]
-                times = exposures["bjd"]
-                # photometry is a list of tuples: flux, flux_err, flag (where flag = 1 means flux is NaN)
-                # to which we want to add a fourth element: the filter
-                # we get the filter simply by looking at the last character of the file name (before the extension)
-                filter = file.split(".")[-2][-1]
-                if filter not in FILTERS:
-                    continue
+                    raw_photometry = sources_data[start:end]
+                    times = exposures["bjd"]
+                    # photometry is a list of tuples: flux, flux_err, flag (where flag = 1 means flux is NaN)
+                    # to which we want to add a fourth element: the filter
+                    # we get the filter simply by looking at the last character of the file name (before the extension)
+                    filter = file.split(".")[-2][-1]
+                    if filter not in FILTERS:
+                        continue
 
-                photometry = []
-                # also just make the flux = NaN where flag = 1
-                for i in range(rows):
-                    if int(raw_photometry[i][2]) == 1:
-                        photometry.append(
-                            [
-                                times[i],
-                                np.nan,
-                                float(raw_photometry[i][1]),
-                                FILTER2IDX[filter],
-                            ]
-                        )
-                    else:
-                        photometry.append(
-                            [
-                                times[i],
-                                float(raw_photometry[i][0]),
-                                float(raw_photometry[i][1]),
-                                FILTER2IDX[filter],
-                            ]
-                        )
+                    photometry = []
+                    # also just make the flux = NaN where flag = 1
+                    for i in range(rows):
+                        if int(raw_photometry[i][2]) == 1:
+                            photometry.append(
+                                [
+                                    times[i],
+                                    np.nan,
+                                    float(raw_photometry[i][1]),
+                                    FILTER2IDX[filter],
+                                ]
+                            )
+                        else:
+                            photometry.append(
+                                [
+                                    times[i],
+                                    float(raw_photometry[i][0]),
+                                    float(raw_photometry[i][1]),
+                                    FILTER2IDX[filter],
+                                ]
+                            )
 
-                # process the photometry with the process_curve function
-                # and the remove_deep_drilling function
-                time, flux, flux_err = (
-                    np.array([x[0] for x in photometry]),
-                    np.array([x[1] for x in photometry]),
-                    np.array([x[2] for x in photometry]),
-                )
-                # print(
-                #     f"NaN: {np.sum(np.isnan(flux))}, >0: {np.sum(flux > 0)}, <0: {np.sum(flux < 0)}, =0: {np.sum(flux == 0)}"
-                # )
-                time, flux, flux_err = process_curve(time, flux, flux_err)
-                time, flux, flux_err = remove_deep_drilling(time, flux, flux_err)
+                    # process the photometry with the process_curve function
+                    # and the remove_deep_drilling function
+                    time, flux, flux_err = (
+                        np.array([x[0] for x in photometry]),
+                        np.array([x[1] for x in photometry]),
+                        np.array([x[2] for x in photometry]),
+                    )
+                    # print(
+                    #     f"NaN: {np.sum(np.isnan(flux))}, >0: {np.sum(flux > 0)}, <0: {np.sum(flux < 0)}, =0: {np.sum(flux == 0)}"
+                    # )
+                    time, flux, flux_err = process_curve(time, flux, flux_err)
+                    time, flux, flux_err = remove_deep_drilling(time, flux, flux_err)
 
-                # put the photometry back together
-                photometry = list(zip(time, flux, flux_err, [x[3] for x in photometry]))
+                    # put the photometry back together
+                    photometry = list(
+                        zip(time, flux, flux_err, [x[3] for x in photometry])
+                    )
 
-                all_photometry[id] = all_photometry[id] + photometry
-
+                    all_photometry[id] = all_photometry[id] + photometry
+        except FileNotFoundError:
+            print(f"File {file} not found")
+            continue
+        except OSError:
+            print(f"Error reading file {file}")
+            continue
+        except KeyError as e:
+            print(f"Key not found in file {file}: {e}")
+            continue
+        except Exception as e:
+            print(f"Error reading file {file}: {e}")
+            continue
     # before we return, we want to:
     # - sort the photometry by time
     # - have a 2D array of shape (4, n_photometry)
