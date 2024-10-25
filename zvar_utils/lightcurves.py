@@ -188,6 +188,7 @@ def read_lightcurves(ids_per_files, local_path):
                     # we get the filter simply by looking at the last character of the file name (before the extension)
                     filter = file.split(".")[-2][-1]
                     if filter not in FILTERS:
+                        print(f"Filter {filter} not in {FILTERS}")
                         continue
 
                     photometry = []
