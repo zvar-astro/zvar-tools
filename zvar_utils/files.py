@@ -34,7 +34,7 @@ def get_files(
             available_files.append(file)
 
     if not missing_files:
-        return
+        return available_files
 
     if ssh_client is None or remote_path is None:
         return available_files
