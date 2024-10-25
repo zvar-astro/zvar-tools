@@ -264,12 +264,13 @@ def retrieve_objs_lightcurve(
     ssh_client: paramiko.SSHClient = None,
     remote_path_lc=None,
     bands=FILTERS,
+    limit_fields=None,  # limit to specific fields
 ):
     # get files for each object
     ids_per_file = {}
     for candidate in objs:
         psid, ra, dec = candidate.id, candidate.ra, candidate.dec
-        files = get_files_list(ra, dec, "data", bands)
+        files = get_files_list(ra, dec, "data", bands, limit_fields=limit_fields)
         for file in files:
             if file not in ids_per_file:
                 ids_per_file[file] = set()

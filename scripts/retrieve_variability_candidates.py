@@ -7,7 +7,7 @@ from zvar_utils.candidate import (
 )
 from zvar_utils.kowalski import connect_to_kowalski
 from zvar_utils.parsers import candidates_parser, validate_candidates_args
-from zvar_utils.periodicity import load_field_periodicity_data
+from zvar_utils.periodicity import load_field_periodicity_data_parallel
 
 if __name__ == "__main__":
     parser = candidates_parser()
@@ -27,6 +27,7 @@ if __name__ == "__main__":
 
     for field in fields:
         for band in bands:
+            print(f"\nField: {field}, Band: {band}:")
             (
                 psids,
                 ra,
@@ -34,12 +35,13 @@ if __name__ == "__main__":
                 ratio_valid,
                 freqs,
                 sigs_clean,
-            ) = load_field_periodicity_data(
+            ) = load_field_periodicity_data_parallel(
                 field, band, periods_path
             )  # Load the data
             candidate_list = get_candidates(
                 psids, ra, dec, ratio_valid, freqs, sigs_clean
             )  # Find the candidates
+            print("Adding Gaia xmatch to candidates")
             candidate_list = add_gaia_xmatch_to_candidates(
                 k, candidate_list, 5
             )  # Fill in the Gaia data
