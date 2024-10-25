@@ -23,7 +23,7 @@ if __name__ == "__main__":
 
     k = connect_to_kowalski(credentials_path)
 
-    fields = np.arange(field_min, field_max + 1)
+    fields = list(set(np.arange(field_min, field_max + 1)))
 
     for field in fields:
         for band in bands:

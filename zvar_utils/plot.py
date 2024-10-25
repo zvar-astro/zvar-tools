@@ -37,22 +37,42 @@ def plot_hr_diagram(
     periods = [
         1 / candidate.freq
         for candidate in candidate_list
-        if candidate.gaia_BP_RP is not None and candidate.gaia_MG is not None
+        if (
+            candidate.gaia_BP_RP is not None
+            and candidate.gaia_MG is not None
+            and not np.isnan(candidate.gaia_BP_RP)
+            and not np.isnan(candidate.gaia_MG)
+        )
     ]
     bp_rp = [
         candidate.gaia_BP_RP
         for candidate in candidate_list
-        if candidate.gaia_BP_RP is not None and candidate.gaia_MG is not None
+        if (
+            candidate.gaia_BP_RP is not None
+            and candidate.gaia_MG is not None
+            and not np.isnan(candidate.gaia_BP_RP)
+            and not np.isnan(candidate.gaia_MG)
+        )
     ]
     mg = [
         candidate.gaia_MG
         for candidate in candidate_list
-        if candidate.gaia_BP_RP is not None and candidate.gaia_MG is not None
+        if (
+            candidate.gaia_BP_RP is not None
+            and candidate.gaia_MG is not None
+            and not np.isnan(candidate.gaia_BP_RP)
+            and not np.isnan(candidate.gaia_MG)
+        )
     ]
     best_M = [
         candidate.best_M
         for candidate in candidate_list
-        if candidate.gaia_BP_RP is not None and candidate.gaia_MG is not None
+        if (
+            candidate.gaia_BP_RP is not None
+            and candidate.gaia_MG is not None
+            and not np.isnan(candidate.gaia_BP_RP)
+            and not np.isnan(candidate.gaia_MG)
+        )
     ]
 
     if len(periods) == 0:
@@ -96,6 +116,8 @@ def plot_hr_diagram(
     # Scatter plot for candidates colored by period with logarithmic scale
     for m_value in MARKER_STYLES:
         indices = [i for i, m in enumerate(best_M) if m == m_value]
+        if not indices:
+            continue
         marker, size = MARKER_STYLES[m_value]
         sc = ax.scatter(
             [bp_rp[i] for i in indices],
@@ -144,7 +166,7 @@ def plot_hr_diagram(
     plt.close()
 
 
-def plot_lightcurve(
+def plot_folded_lightcurve(
     candidate: VariabilityCandidate,
     time,
     flux,
