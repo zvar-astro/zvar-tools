@@ -19,7 +19,7 @@ if __name__ == "__main__":
     radius = args.radius
     periods_path = args.periods_path
     output_path = args.output_path
-    credentials_path = args.credentials
+    credentials_path = args.credentials_path
 
     k = connect_to_kowalski(credentials_path)
 
