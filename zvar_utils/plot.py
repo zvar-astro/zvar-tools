@@ -194,13 +194,21 @@ def plot_folded_lightcurve(
 
     # only keep data points in the band of interest, so where filters is in the list of bands
     mask = np.array([f in bands for f in filters])
-    time = time[mask]
-    flux = flux[mask]
-    fluxerr = fluxerr[mask]
-    filters = filters[mask]
+
+    try:
+        time = time[mask]
+        flux = flux[mask]
+        fluxerr = fluxerr[mask]
+        filters = filters[mask]
+    except IndexError:
+        raise ValueError(
+            f"No data points found in the specified bands for {int(candidate.id)}"
+        )
 
     if len(time) == 0:
-        raise ValueError("No valid data points found to plot_folded_lightcurve")
+        raise ValueError(
+            f"No valid data points found to plot_folded_lightcurve for {int(candidate.id)}"
+        )
 
     times_days = time / 86400
     phase = (times_days * candidate.freq) % 2
@@ -224,7 +232,7 @@ def plot_folded_lightcurve(
     ax.set_xlabel("Phase")
     ax.set_ylabel("Flux")
     ax.set_title(
-        f"ID: {np.format_float_positional(candidate.id)}, RA: {candidate.ra}, DEC: {candidate.dec}\nPeriod: {24/candidate.freq:.4f} hours, Best M: {candidate.best_M}"
+        f"ID: {int(candidate.id)}, RA: {candidate.ra}, DEC: {candidate.dec}\nPeriod: {24/candidate.freq:.4f} hours, Best M: {candidate.best_M}"
     )
 
     if output_path:
@@ -282,7 +290,7 @@ def plot_periodicity(
 
     # add a title to the entire figure
     fig.suptitle(
-        f"ID: {np.format_float_positional(candidate.id)}, RA: {candidate.ra}, DEC: {candidate.dec}\nBest M: {candidate.best_M}",
+        f"ID: {int(candidate.id)}, RA: {candidate.ra}, DEC: {candidate.dec}\nBest M: {candidate.best_M}",
         fontsize=16,
     )
 
