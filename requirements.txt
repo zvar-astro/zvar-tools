@@ -5,3 +5,5 @@ penquins
 pre-commit
 paramiko
 scp
+pyarrow
+fastparquet

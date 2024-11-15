@@ -432,7 +432,7 @@ def add_allwise_xmatch_to_candidates(
     return candidate_list
 
 
-def export_to_csv(
+def export_to_parquet(
     candidate_list: List[VariabilityCandidate], field: int, band: int, path: str
 ):
     if not isinstance(candidate_list, list):
@@ -501,20 +501,20 @@ def export_to_csv(
     candidate_path = os.path.join(
         os.path.abspath(path),
         f"{str(field).zfill(4)}",
-        f"fpw_{str(field).zfill(4)}_z{band}.csv",
+        f"fpw_{str(field).zfill(4)}_z{band}.parquet",
     )
 
     # Check if the directory exists, and create it if it doesn't
     os.makedirs(os.path.dirname(candidate_path), exist_ok=True)
 
-    # Create the DataFrame and write to CSV
-    pd.DataFrame(data).to_csv(candidate_path, index=False)
+    # Create the DataFrame and write to parquet
+    pd.DataFrame(data).to_parquet(candidate_path, index=False)
 
 
-def import_from_csv(path: str, best_m_only=True) -> List[VariabilityCandidate]:
+def import_from_parquet(path: str, best_m_only=True) -> List[VariabilityCandidate]:
     if not os.path.exists(path):
         raise ValueError(f"File {path} does not exist")
-    df = pd.read_csv(path)
+    df = pd.read_parquet(path)
     candidate_list = []
 
     for index, row in df.iterrows():

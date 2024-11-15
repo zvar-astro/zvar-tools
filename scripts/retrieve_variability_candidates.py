@@ -2,7 +2,7 @@ import numpy as np
 
 from zvar_utils.candidate import (
     get_candidates,
-    export_to_csv,
+    export_to_parquet,
     add_gaia_xmatch_to_candidates,
     add_ps1_xmatch_to_candidates,
     add_2mass_xmatch_to_candidates,
@@ -61,6 +61,6 @@ if __name__ == "__main__":
                 k, candidate_list, radius
             )  # Fill in the AllWISE data
             print("Exporting candidates to CSV")
-            export_to_csv(
+            export_to_parquet(
                 candidate_list, field, band, output_path
             )  # Write the candidates to a CSV file
