@@ -6,40 +6,43 @@ import numpy as np
 import paramiko
 
 from zvar_utils.candidate import VariabilityCandidate
-from zvar_utils.stats import median_abs_deviation
+
+# from zvar_utils.stats import median_abs_deviation
 from zvar_utils.files import get_files_list, get_files
 from zvar_utils.enums import FILTERS, FILTER2IDX
 
 
 def process_curve(
-    time: list, flux: list, flux_err: list
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    time: list, flux: list, flux_err: list, filter: list
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     time *= 86400  # Convert from BJD to BJS
     time += 15  # midpoint correct ZTF timestamps
     time -= np.min(time)  # Subtract off the zero point (ephemeris may be added later)
 
     # Set nan values to zero
-    flux[np.isnan(flux)] = 0
-    flux_err[flux == 0] = np.inf
+    # flux[np.isnan(flux)] = 0
+    # flux_err[flux == 0] = np.inf
 
-    valid = np.where(np.abs(flux) < 1.483 * median_abs_deviation(flux))
+    # valid = np.where(np.abs(flux) < 1.483 * median_abs_deviation(flux))
 
-    time = time[valid]
-    flux = flux[valid]
-    flux_err = flux_err[valid]
+    # time = time[valid]
+    # flux = flux[valid]
+    # flux_err = flux_err[valid]
 
-    flux -= np.mean(flux)
+    # subtract off the mean (of non-NaN values)
 
-    return time, flux, flux_err
+    flux -= np.mean(flux[np.isnan(flux) == False])  # noqa E712
+
+    return time, flux, flux_err, filter
 
 
 def remove_deep_drilling(
-    time: np.ndarray, flux: np.ndarray, flux_err: np.ndarray
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    time: np.ndarray, flux: np.ndarray, flux_err: np.ndarray, filter: np.ndarray
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     if len(time) == 0:
-        return time, flux, flux_err
+        return time, flux, flux_err, filter
     dt = 40.0  # seconds
-    znew_times, znew_flux, znew_flux_err = [], [], []
+    znew_times, znew_flux, znew_flux_err, znew_filter = [], [], [], []
 
     unique_days = np.unique(np.floor(time / 86400.0))
     for ud in unique_days:
@@ -67,16 +70,19 @@ def remove_deep_drilling(
             znew_times.append(zday_times[~zdiff])
             znew_flux.append(zday_flux[~zdiff])
             znew_flux_err.append(zday_flux_err[~zdiff])
+            znew_filter.append(filter[mask][~zdiff])
         else:
             znew_times.append(zday_times)
             znew_flux.append(zday_flux)
             znew_flux_err.append(zday_flux_err)
+            znew_filter.append(filter[mask])
 
     znew_times = np.concatenate(znew_times)
     znew_flux = np.concatenate(znew_flux)
     znew_flux_err = np.concatenate(znew_flux_err)
+    znew_filter = np.concatenate(znew_filter)
 
-    return znew_times, znew_flux, znew_flux_err
+    return znew_times, znew_flux, znew_flux_err, znew_filter
 
 
 def freq_grid(
@@ -223,8 +229,8 @@ def read_lightcurves(ids_per_files, local_path):
                     # print(
                     #     f"NaN: {np.sum(np.isnan(flux))}, >0: {np.sum(flux > 0)}, <0: {np.sum(flux < 0)}, =0: {np.sum(flux == 0)}"
                     # )
-                    time, flux, flux_err = process_curve(time, flux, flux_err)
-                    time, flux, flux_err = remove_deep_drilling(time, flux, flux_err)
+                    # time, flux, flux_err = process_curve(time, flux, flux_err)
+                    # time, flux, flux_err = remove_deep_drilling(time, flux, flux_err)
 
                     # put the photometry back together
                     photometry = list(
@@ -254,6 +260,9 @@ def read_lightcurves(ids_per_files, local_path):
         all_photometry[id] = np.array(sorted(photometry, key=lambda x: x[0])).T.copy(
             order="C"
         )
+        # call process lightcurve on the photometry
+        all_photometry[id] = process_curve(*all_photometry[id])
+        all_photometry[id] = remove_deep_drilling(*all_photometry[id])
 
     return all_photometry
 

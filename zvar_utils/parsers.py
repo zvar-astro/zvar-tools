@@ -23,8 +23,8 @@ def candidates_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--radius",
-        type=int,
-        default=5,
+        type=float,
+        default=2.0,
         help="Radius in arcseconds to search for xmatches in external catalogs",
     )
     parser.add_argument(

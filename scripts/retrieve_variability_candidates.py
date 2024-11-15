@@ -2,8 +2,11 @@ import numpy as np
 
 from zvar_utils.candidate import (
     get_candidates,
-    save_candidates_to_csv,
+    export_to_csv,
     add_gaia_xmatch_to_candidates,
+    add_ps1_xmatch_to_candidates,
+    add_2mass_xmatch_to_candidates,
+    add_allwise_xmatch_to_candidates,
 )
 from zvar_utils.kowalski import connect_to_kowalski
 from zvar_utils.parsers import candidates_parser, validate_candidates_args
@@ -43,8 +46,21 @@ if __name__ == "__main__":
             )  # Find the candidates
             print("Adding Gaia xmatch to candidates")
             candidate_list = add_gaia_xmatch_to_candidates(
-                k, candidate_list, 5
+                k, candidate_list, radius
             )  # Fill in the Gaia data
-            save_candidates_to_csv(
+            print("Adding Pan-STARRS xmatch to candidates")
+            candidate_list = add_ps1_xmatch_to_candidates(
+                k, candidate_list
+            )  # Fill in the Pan-STARRS data
+            print("Adding 2MASS xmatch to candidates")
+            candidate_list = add_2mass_xmatch_to_candidates(
+                k, candidate_list, radius
+            )  # Fill in the 2MASS data
+            print("Adding AllWISE xmatch to candidates")
+            candidate_list = add_allwise_xmatch_to_candidates(
+                k, candidate_list, radius
+            )  # Fill in the AllWISE data
+            print("Exporting candidates to CSV")
+            export_to_csv(
                 candidate_list, field, band, output_path
             )  # Write the candidates to a CSV file
