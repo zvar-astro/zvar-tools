@@ -250,19 +250,18 @@ def read_lightcurves(ids_per_files, local_path):
         except Exception as e:
             print(f"Error reading file {file}: {e}")
             continue
-    # before we return, we want to:
-    # - sort the photometry by time
-    # - have a 2D array of shape (4, n_photometry)
-    #   instead of a list of tuples
-    # so that when accessing the photometry for a given id, we can do:
-    # time, flux, flux_err, filter = all_photometry[id]
+
     for id, photometry in all_photometry.items():
-        all_photometry[id] = np.array(sorted(photometry, key=lambda x: x[0])).T.copy(
-            order="C"
-        )
+        # sort the photometry by time and reshape
+        all_photometry[id] = np.array(sorted(photometry, key=lambda x: x[0])).T
         # call process lightcurve on the photometry
         all_photometry[id] = process_curve(*all_photometry[id])
         all_photometry[id] = remove_deep_drilling(*all_photometry[id])
+
+        # instead of a tuple of arrays, we want an array of shape (4, n_photometry)
+        # so that when accessing the photometry for a given id, we can do:
+        # time, flux, flux_err, filter = all_photometry[id]
+        all_photometry[id] = np.array(all_photometry[id], order="C")
 
     return all_photometry
 

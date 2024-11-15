@@ -17,12 +17,11 @@ BAND_NAME_TO_IDX = {"g": 1, "r": 2, "i": 3}
 MARKER_STYLES = {5: ("s", 20), 10: ("o", 20), 20: ("*", 35)}
 
 
-def plot_hr_diagram(
+def plot_gaia_cmd(
     candidate_list: List[VariabilityCandidate],
-    band: str,
     figsize: tuple = (9, 8),
     output_path: str = None,
-    show_plot: bool = False,
+    show_plot: bool = True,
 ):
     if not isinstance(candidate_list, list):
         raise ValueError("Candidates must be provided as a list")
@@ -30,8 +29,6 @@ def plot_hr_diagram(
         isinstance(candidate, VariabilityCandidate) for candidate in candidate_list
     ):
         raise ValueError("Candidates must be of type Candidate")
-    if band not in ALLOWED_BANDS:
-        raise ValueError(f"Invalid band specified. Allowed bands are {ALLOWED_BANDS}")
     if output_path is not None and not isinstance(output_path, (str, os.PathLike)):
         raise ValueError("Output path must be a string or a PathLike object")
     if not isinstance(show_plot, bool):
@@ -139,9 +136,7 @@ def plot_hr_diagram(
     cbar.set_label("Period (log days)", fontsize=16)
 
     # Set plot appearances
-    ax.set_title(
-        f"Gaia HR Diagram with Variability Candidates Sloan {band} band", fontsize=16
-    )
+    ax.set_title("Gaia HR Diagram with Variability Candidates", fontsize=16)
     ax.set_ylabel("$M_G$ (mag)", fontsize=16)
     ax.set_xlabel("$BP-RP$ (mag)", fontsize=16)
     # ax.set_xlim(-1.0, 4.5)
@@ -185,7 +180,7 @@ def plot_folded_lightcurve(
     bands: List[str] = ["g", "r"],
     figsize: tuple = (9, 8),
     output_path: str = None,
-    show_plot: bool = False,
+    show_plot: bool = True,
 ):
     bands = list({band.lower() for band in bands})
     if not all(band in ALLOWED_BANDS for band in bands):
