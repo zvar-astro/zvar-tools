@@ -33,7 +33,7 @@ class PS1Match:
         self.y_err = y_err
 
     def __repr__(self):
-        return f"PS1Match({self.id}, {self.g}, {self.g_err}, {self.r}, {self.r_err}, {self.i}, {self.i_err}, {self.z}, {self.z_err}, {self.y}, {self.y_err})"
+        return f"G: {self.g:.2f}±{self.g_err:.2f}, R: {self.r:.2f}±{self.r_err:.2f}, I: {self.i:.2f}±{self.i_err:.2f}, Z: {self.z:.2f}±{self.z_err:.2f}, Y: {self.y:.2f}±{self.y_err:.2f}"
 
     def __str__(self):
         return self.__repr__()
@@ -70,7 +70,7 @@ class GaiaMatch:
         self.add_MG()
 
     def __repr__(self):
-        return f"GaiaMatch({self.id}, {self.G}, {self.BP}, {self.RP}, {self.parallax}, {self.parallax_error}, {self.pmra}, {self.pmra_error}, {self.pmdec}, {self.pmdec_error})"
+        return f"G: {self.G:.2f}, BP: {self.BP:.2f}, RP: {self.RP:.2f}, Parallax: {self.parallax:.2f}±{self.parallax_error:.2f}, PMRA: {self.pmra:.2f}±{self.pmra_error:.2f}, PMDEC: {self.pmdec:.2f}±{self.pmdec_error:.2f}"
 
     def __str__(self):
         return self.__repr__()
@@ -102,7 +102,7 @@ class TwoMASSMatch:
         self.k_err = k_err
 
     def __repr__(self):
-        return f"2MASSMatch({self.id}, {self.j}, {self.j_err}, {self.h}, {self.h_err}, {self.k}, {self.k_err})"
+        return f"J: {self.j:.2f}±{self.j_err:.2f}, H: {self.h:.2f}±{self.h_err:.2f}, K: {self.k:.2f}±{self.k_err:.2f}"
 
     def __str__(self):
         return self.__repr__()
@@ -121,7 +121,7 @@ class AllWISEMatch:
         self.w4_err = w4_err
 
     def __repr__(self):
-        return f"AllWISEMatch({self.id}, {self.w1}, {self.w1_err}, {self.w2}, {self.w2_err}, {self.w3}, {self.w3_err}, {self.w4}, {self.w4_err})"
+        return f"W1: {self.w1:.2f}±{self.w1_err:.2f}, W2: {self.w2:.2f}±{self.w2_err:.2f}, W3: {self.w3:.2f}±{self.w3_err:.2f}, W4: {self.w4:.2f}±{self.w4_err:.2f}"
 
     def __str__(self):
         return self.__repr__()
@@ -208,6 +208,15 @@ class VariabilityCandidate:
             self.allwise = None
         else:
             raise ValueError("AllWISE must be a AllWISEMatch, a dictionary, or None")
+
+    def __repr__(self):
+        return (
+            f"ID: {self.id}, RA: {self.ra}, Dec: {self.dec}, Valid: {self.valid}, Best M: {self.best_M}, freq: {self.freq}, FAP: {self.fap}"
+            + (f"\n    PS1: {self.ps1}" if self.ps1 else "")
+            + (f"\n    Gaia: {self.gaia}" if self.gaia else "")
+            + (f"\n    2MASS: {self.twomass}" if self.twomass else "")
+            + (f"\n    AllWISE: {self.allwise}" if self.allwise else "")
+        )
 
 
 def get_candidates(
@@ -438,6 +447,11 @@ def export_to_csv(
         raise ValueError("Band must be an integer or string")
     if path is None:
         raise ValueError("Output directory must be specified")
+
+    # before we export the data, we want to sort the candidates by their id (psid)
+    # to make sure we get consistent results when rerunning the code
+    candidate_list = sorted(candidate_list, key=lambda x: x.id)
+
     data = []
     for candidate in candidate_list:
         candidate_data = {

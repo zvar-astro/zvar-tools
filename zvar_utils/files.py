@@ -85,6 +85,18 @@ def get_ssh_client(host, username=None, password=None, pkey_path=None):
     else:
         k = None
 
-    ssh.connect(host, username=username, password=password, pkey=k)
+    try:
+        ssh.connect(host, username=username, password=password, pkey=k)
+    except paramiko.AuthenticationException as e:
+        print(f"Could not authenticate to {host}: {e}")
+        return None
+    except paramiko.SSHException as e:
+        print(f"Could not connect to {host}: {e}")
+        return None
+    except Exception as e:
+        print(f"Could not connect to {host}: {e}")
+        return None
+
+    print(f"Successfully connected to {host}")
 
     return ssh
