@@ -11,6 +11,9 @@ from zvar_utils.candidate import VariabilityCandidate
 from zvar_utils.enums import ALLOWED_BANDS
 from zvar_utils.lightcurves import freq_grid
 
+BAND_TO_COLOR = {1: "green", 2: "red", 3: "orange"}
+BAND_IDX_TO_NAME = {1: "g", 2: "r", 3: "i"}
+BAND_NAME_TO_IDX = {"g": 1, "r": 2, "i": 3}
 MARKER_STYLES = {5: ("s", 20), 10: ("o", 20), 20: ("*", 35)}
 
 
@@ -38,40 +41,40 @@ def plot_hr_diagram(
         1 / candidate.freq
         for candidate in candidate_list
         if (
-            candidate.gaia_BP_RP is not None
-            and candidate.gaia_MG is not None
-            and not np.isnan(candidate.gaia_BP_RP)
-            and not np.isnan(candidate.gaia_MG)
+            candidate.gaia.BP_RP is not None
+            and candidate.gaia.MG is not None
+            and not np.isnan(candidate.gaia.BP_RP)
+            and not np.isnan(candidate.gaia.MG)
         )
     ]
     bp_rp = [
-        candidate.gaia_BP_RP
+        candidate.gaia.BP_RP
         for candidate in candidate_list
         if (
-            candidate.gaia_BP_RP is not None
-            and candidate.gaia_MG is not None
-            and not np.isnan(candidate.gaia_BP_RP)
-            and not np.isnan(candidate.gaia_MG)
+            candidate.gaia.BP_RP is not None
+            and candidate.gaia.MG is not None
+            and not np.isnan(candidate.gaia.BP_RP)
+            and not np.isnan(candidate.gaia.MG)
         )
     ]
     mg = [
-        candidate.gaia_MG
+        candidate.gaia.MG
         for candidate in candidate_list
         if (
-            candidate.gaia_BP_RP is not None
-            and candidate.gaia_MG is not None
-            and not np.isnan(candidate.gaia_BP_RP)
-            and not np.isnan(candidate.gaia_MG)
+            candidate.gaia.BP_RP is not None
+            and candidate.gaia.MG is not None
+            and not np.isnan(candidate.gaia.BP_RP)
+            and not np.isnan(candidate.gaia.MG)
         )
     ]
     best_M = [
         candidate.best_M
         for candidate in candidate_list
         if (
-            candidate.gaia_BP_RP is not None
-            and candidate.gaia_MG is not None
-            and not np.isnan(candidate.gaia_BP_RP)
-            and not np.isnan(candidate.gaia_MG)
+            candidate.gaia.BP_RP is not None
+            and candidate.gaia.MG is not None
+            and not np.isnan(candidate.gaia.BP_RP)
+            and not np.isnan(candidate.gaia.MG)
         )
     ]
 
@@ -166,25 +169,67 @@ def plot_hr_diagram(
     plt.close()
 
 
+def mask_non_detections(time, flux, fluxerr, filters):
+    mask = ~np.isnan(flux)
+    time = time[mask]
+    flux = flux[mask]
+    fluxerr = fluxerr[mask]
+    filters = filters[mask]
+
+    return time, flux, fluxerr, filters
+
+
 def plot_folded_lightcurve(
     candidate: VariabilityCandidate,
-    time,
-    flux,
-    fluxerr,
+    photometry: List[np.ndarray],
+    bands: List[str] = ["g", "r"],
     figsize: tuple = (9, 8),
     output_path: str = None,
     show_plot: bool = False,
 ):
+    bands = list({band.lower() for band in bands})
+    if not all(band in ALLOWED_BANDS for band in bands):
+        raise ValueError(f"Invalid band specified. Allowed bands are {ALLOWED_BANDS}")
+    bands = [BAND_NAME_TO_IDX[band] for band in bands]
+
+    # remove data points with flux = NaN
+    time, flux, fluxerr, filters = mask_non_detections(
+        photometry[0], photometry[1], photometry[2], photometry[3]
+    )
+
+    # only keep data points in the band of interest, so where filters is in the list of bands
+    mask = np.array([f in bands for f in filters])
+    time = time[mask]
+    flux = flux[mask]
+    fluxerr = fluxerr[mask]
+    filters = filters[mask]
+
+    if len(time) == 0:
+        raise ValueError("No valid data points found to plot_folded_lightcurve")
+
     times_days = time / 86400
     phase = (times_days * candidate.freq) % 2
 
     _, ax = plt.subplots(1, 1, figsize=figsize)
 
-    ax.errorbar(phase, flux, yerr=fluxerr, fmt="o", color="black", ms=3)
+    for band in bands:
+        mask = filters == band
+        if not np.any(mask):
+            continue
+        ax.errorbar(
+            phase[mask],
+            flux[mask],
+            yerr=fluxerr[mask],
+            fmt="o",
+            label=band,
+            color=BAND_TO_COLOR[band],
+            ms=4,
+        )
+    # ax.errorbar(phase, flux, yerr=fluxerr, fmt="o", color="black", ms=3)
     ax.set_xlabel("Phase")
     ax.set_ylabel("Flux")
     ax.set_title(
-        f"ID: {candidate.id}, RA: {candidate.ra}, DEC: {candidate.dec}\nPeriod: {24/candidate.freq:.4f} hours, Best M: {candidate.best_M}"
+        f"ID: {np.format_float_positional(candidate.id)}, RA: {candidate.ra}, DEC: {candidate.dec}\nPeriod: {24/candidate.freq:.4f} hours, Best M: {candidate.best_M}"
     )
 
     if output_path:
@@ -200,14 +245,23 @@ def plot_folded_lightcurve(
 
 def plot_periodicity(
     candidate: VariabilityCandidate,
-    time: np.ndarray,
-    flux: np.ndarray,
-    fluxerr: np.ndarray,
+    photometry: List[np.ndarray],
     pgram: np.ndarray,
     best_period: float,
     show_plot: bool = True,
     figsize: tuple = (12, 14),
 ):
+    # for now this method supports single band data, so to prevent any errors we throw an exception if there are multiple filters
+    if len(set(photometry[3])) > 1:
+        raise ValueError("This method only supports single band data (for now)")
+
+    # remove data points with flux = NaN
+    time, flux, fluxerr, _ = mask_non_detections(
+        photometry[0], photometry[1], photometry[2], photometry[3]
+    )
+    if len(time) == 0:
+        raise ValueError("No valid data points found to plot_periodicity")
+
     fgrid = freq_grid(time)
 
     phase = (time / best_period) % 2
@@ -233,7 +287,7 @@ def plot_periodicity(
 
     # add a title to the entire figure
     fig.suptitle(
-        f"ID: {candidate.id}, RA: {candidate.ra}, DEC: {candidate.dec}\nBest M: {candidate.best_M}",
+        f"ID: {np.format_float_positional(candidate.id)}, RA: {candidate.ra}, DEC: {candidate.dec}\nBest M: {candidate.best_M}",
         fontsize=16,
     )
 

@@ -1,7 +1,7 @@
 import glob
 import os
 from typing import Tuple
-from multiprocessing import Pool
+from multiprocessing import Pool, cpu_count
 from tqdm import tqdm
 
 import h5py
@@ -129,7 +129,7 @@ def load_field_periodicity_data_parallel(
     data_per_file = np.empty(len(files), dtype=object)
 
     # create a pool of workers
-    with Pool(8) as pool:
+    with Pool(min(8, cpu_count() - 2)) as pool:
         with tqdm(total=len(files), desc="Loading files") as pbar:
             for file_name, data in pool.imap_unordered(load_file, files):
                 if data is None:
