@@ -79,6 +79,15 @@ def validate_gaia_source(source):
     return True, None
 
 
+def validate_positional_source(source):
+    if not isinstance(source, dict):
+        return False, "Source must be a dictionary"
+    ra, dec = source.get("ra"), source.get("dec")
+    if not all(isinstance(val, (int, float)) for val in [ra, dec]):
+        return False, "RA and Dec must be numbers"
+    return True, None
+
+
 def query_cone_search(
     k: Kowalski,
     ids: List[int],
@@ -345,7 +354,7 @@ def query_2mass(
         projection={
             "_id": 1,
             "ra": 1,
-            "dec": 1,
+            "dec": "$decl",
             "j_m": 1,
             "j_cmsig": 1,
             "h_m": 1,
@@ -353,6 +362,7 @@ def query_2mass(
             "k_m": 1,
             "k_cmsig": 1,
         },
+        validate=validate_positional_source,
     )
 
 
@@ -386,6 +396,7 @@ def query_allwise(
             "w4mpro": 1,
             "w4sigmpro": 1,
         },
+        validate=validate_positional_source,
     )
 
 
@@ -414,4 +425,5 @@ def query_galex(
             "NUVmag": 1,
             "e_NUVmag": 1,
         },
+        validate=validate_positional_source,
     )
