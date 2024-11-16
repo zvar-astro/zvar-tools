@@ -87,6 +87,8 @@ def load_file(file):
             ratio_valid = np.array(dataset["valid"])
             best_freqs = np.array(dataset["bestFreqs"])
             significances = np.array(dataset["significance"])
+            # clean the significances
+            np.nan_to_num(significances, nan=0, posinf=0, neginf=0, copy=False)
             ra = np.array(dataset["ra"])
             dec = np.array(dataset["dec"])
 
@@ -188,6 +190,5 @@ def load_field_periodicity_data_parallel(
 
     freqs = best_freqs.reshape((len(psids), 3, 50))
     sigs = significances.reshape((len(psids), 3, 50))
-    sigs_clean = np.nan_to_num(sigs, nan=0, posinf=0, neginf=0)
 
-    return psids, ra, dec, ratio_valid, freqs, sigs_clean
+    return psids, ra, dec, ratio_valid, freqs, sigs
