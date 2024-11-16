@@ -119,6 +119,11 @@ def query_cone_search(
     if not callable(validate) and validate is not None:
         raise ValueError("Validate must be a callable, or None")
 
+    # we want a mapper from id to (ra, dec)
+    # so that when we loop over the xmatch results, we can easily find the original source
+    # position and compute angular separation to each xmatch result
+    id_to_position = {id: (ra, dec) for id, ra, dec in zip(ids, ras, decs)}
+
     # Create a list of tuples of (psid, ra, dec) for each source
     inputs = []
     for i in range(len(ids)):
@@ -187,9 +192,8 @@ def query_cone_search(
                 results[int(id)] = result[0]
                 continue
 
-            idx = ids.index(int(id))
-            ra, dec = ras[idx], decs[idx]
             # keep the closest source
+            ra, dec = id_to_position[int(id)]
             min_dist = np.inf
             for source in result:
                 dist = great_circle_distance(ra, dec, source["ra"], source["dec"])
@@ -303,6 +307,7 @@ def query_gaia(
             "dec": 1,
         },
         validate=validate_gaia_source,
+        # validate=validate_positional_source,
     )
 
 

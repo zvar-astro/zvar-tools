@@ -44,14 +44,14 @@ if __name__ == "__main__":
             candidate_list = get_candidates(
                 psids, ra, dec, ratio_valid, freqs, sigs_clean
             )  # Find the candidates
-            print("Adding Gaia xmatch to candidates")
-            candidate_list = add_gaia_xmatch_to_candidates(
-                k, candidate_list, radius
-            )  # Fill in the Gaia data
             print("Adding Pan-STARRS xmatch to candidates")
             candidate_list = add_ps1_xmatch_to_candidates(
                 k, candidate_list
             )  # Fill in the Pan-STARRS data
+            print("Adding Gaia xmatch to candidates")
+            candidate_list = add_gaia_xmatch_to_candidates(
+                k, candidate_list, radius
+            )  # Fill in the Gaia data
             print("Adding 2MASS xmatch to candidates")
             candidate_list = add_2mass_xmatch_to_candidates(
                 k, candidate_list, radius
