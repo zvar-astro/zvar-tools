@@ -7,3 +7,8 @@ paramiko
 scp
 pyarrow
 fastparquet
+numba
+scipy
+h5py
+tqdm
+matplotlib
