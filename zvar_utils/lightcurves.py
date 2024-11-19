@@ -85,6 +85,18 @@ def remove_deep_drilling(
     return znew_times, znew_flux, znew_flux_err, znew_filter
 
 
+def remove_nans(
+    time: np.ndarray, flux: np.ndarray, flux_err: np.ndarray, filter: np.ndarray
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    mask = np.isnan(flux)
+    return (
+        time[~mask],
+        flux[~mask],
+        flux_err[~mask],
+        filter[~mask],
+    )
+
+
 def freq_grid(
     t: np.ndarray, fmin: float = None, fmax: float = None, oversample: int = 3
 ) -> np.ndarray:

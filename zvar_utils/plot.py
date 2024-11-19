@@ -9,7 +9,7 @@ from matplotlib.gridspec import GridSpec
 
 from zvar_utils.candidate import VariabilityCandidate
 from zvar_utils.enums import ALLOWED_BANDS
-from zvar_utils.lightcurves import freq_grid
+from zvar_utils.lightcurves import freq_grid, remove_nans
 
 BAND_TO_COLOR = {1: "green", 2: "red", 3: "orange"}
 BAND_IDX_TO_NAME = {1: "g", 2: "r", 3: "i"}
@@ -164,16 +164,6 @@ def plot_gaia_cmd(
     plt.close()
 
 
-def mask_non_detections(time, flux, fluxerr, filters):
-    mask = ~np.isnan(flux)
-    time = time[mask]
-    flux = flux[mask]
-    fluxerr = fluxerr[mask]
-    filters = filters[mask]
-
-    return time, flux, fluxerr, filters
-
-
 def plot_folded_lightcurve(
     candidate: VariabilityCandidate,
     photometry: List[np.ndarray],
@@ -188,7 +178,7 @@ def plot_folded_lightcurve(
     bands = [BAND_NAME_TO_IDX[band] for band in bands]
 
     # remove data points with flux = NaN
-    time, flux, fluxerr, filters = mask_non_detections(
+    time, flux, fluxerr, filters = remove_nans(
         photometry[0], photometry[1], photometry[2], photometry[3]
     )
 
@@ -259,7 +249,7 @@ def plot_periodicity(
         raise ValueError("This method only supports single band data (for now)")
 
     # remove data points with flux = NaN
-    time, flux, fluxerr, _ = mask_non_detections(
+    time, flux, fluxerr, _ = remove_nans(
         photometry[0], photometry[1], photometry[2], photometry[3]
     )
     if len(time) == 0:
