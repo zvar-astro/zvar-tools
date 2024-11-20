@@ -11,7 +11,7 @@ from zvar_utils.kowalski import (
     query_2mass,
     query_allwise,
 )
-from zvar_utils.stats import calculate_cdf, find_extrema
+from zvar_utils.stats import get_cdf, get_extrema
 
 
 BIN_IDX_TO_FREQ_COL = {0: "frequency_20", 1: "frequency_10", 2: "frequency_5"}
@@ -228,13 +228,13 @@ def get_candidates(
     sigs: np.ndarray,
 ) -> List[VariabilityCandidate]:
     # Precompute the CDFs for each bin
-    cdfs = [calculate_cdf(sigs[:, j, 0]) for j in range(3)]
+    cdfs = [get_cdf(sigs[:, j, 0]) for j in range(3)]
 
-    extrema_20 = find_extrema(sigs[:, 0, 0], 0.999)
+    extrema_20 = get_extrema(sigs[:, 0, 0], 0.999)
     print(f"Found {np.sum(extrema_20)} candidates in the 20-day bin")
-    extrema_10 = find_extrema(sigs[:, 1, 0], 0.999)
+    extrema_10 = get_extrema(sigs[:, 1, 0], 0.999)
     print(f"Found {np.sum(extrema_10)} candidates in the 10-day bin")
-    extrema_5 = find_extrema(sigs[:, 2, 0], 0.999)
+    extrema_5 = get_extrema(sigs[:, 2, 0], 0.999)
     print(f"Found {np.sum(extrema_5)} candidates in the 5-day bin")
     combined_candidates = np.logical_or.reduce([extrema_20, extrema_10, extrema_5])
     print(f"Found {np.sum(combined_candidates)} combined candidates")

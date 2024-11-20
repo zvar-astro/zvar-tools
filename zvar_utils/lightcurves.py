@@ -266,7 +266,7 @@ def read_lightcurves(ids_per_files, local_path):
     for id, photometry in all_photometry.items():
         # sort the photometry by time and reshape
         all_photometry[id] = np.array(sorted(photometry, key=lambda x: x[0])).T
-        # call process lightcurve on the photometry
+        # clean the photometry
         all_photometry[id] = process_curve(*all_photometry[id])
         all_photometry[id] = remove_deep_drilling(*all_photometry[id])
 

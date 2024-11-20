@@ -168,10 +168,16 @@ def plot_folded_lightcurve(
     candidate: VariabilityCandidate,
     photometry: List[np.ndarray],
     bands: List[str] = ["g", "r"],
+    period: float = None,
     figsize: tuple = (9, 8),
     output_path: str = None,
     show_plot: bool = True,
+    ax=None,
+    marker_size: int = 4,
+    title_size: int = 16,
 ):
+    if period is None:
+        period = 1 / candidate.freq
     bands = list({band.lower() for band in bands})
     if not all(band in ALLOWED_BANDS for band in bands):
         raise ValueError(f"Invalid band specified. Allowed bands are {ALLOWED_BANDS}")
@@ -200,10 +206,10 @@ def plot_folded_lightcurve(
             f"No valid data points found to plot_folded_lightcurve for {int(candidate.id)}"
         )
 
-    times_days = time / 86400
-    phase = (times_days * candidate.freq) % 2
+    phase = (time / (period * 86400)) % 2  # period is converted from days to seconds
 
-    _, ax = plt.subplots(1, 1, figsize=figsize)
+    if ax is None:
+        _, ax = plt.subplots(1, 1, figsize=figsize)
 
     for band in bands:
         mask = filters == band
@@ -216,13 +222,14 @@ def plot_folded_lightcurve(
             fmt="o",
             label=band,
             color=BAND_TO_COLOR[band],
-            ms=4,
+            ms=marker_size,
         )
     # ax.errorbar(phase, flux, yerr=fluxerr, fmt="o", color="black", ms=3)
     ax.set_xlabel("Phase")
     ax.set_ylabel("Flux")
     ax.set_title(
-        f"ID: {int(candidate.id)}, RA: {candidate.ra}, DEC: {candidate.dec}\nPeriod: {24/candidate.freq:.4f} hours, Best M: {candidate.best_M}"
+        f"ID: {int(candidate.id)}\nRA: {candidate.ra:.4f}, DEC: {candidate.dec:.4f}\nPeriod: {24/candidate.freq:.4f} hours, Best M: {candidate.best_M}",
+        fontsize=title_size,
     )
 
     if output_path:
@@ -232,18 +239,19 @@ def plot_folded_lightcurve(
 
     if show_plot:
         plt.show()
-
-    plt.close()
+        plt.close()
 
 
 def plot_periodicity(
     candidate: VariabilityCandidate,
     photometry: List[np.ndarray],
     pgram: np.ndarray,
-    best_period: float,
+    period: float,
     show_plot: bool = True,
     figsize: tuple = (12, 14),
 ):
+    if period is None:
+        period = 1 / candidate.freq
     # for now this method supports single band data, so to prevent any errors we throw an exception if there are multiple filters
     if len(set(photometry[3])) > 1:
         raise ValueError("This method only supports single band data (for now)")
@@ -257,7 +265,7 @@ def plot_periodicity(
 
     fgrid = freq_grid(time)
 
-    phase = (time / best_period) % 2
+    phase = (time / (period * 86400)) % 2  # period is converted from days to seconds
 
     # we plot all 3 plots above in a row of 3 subplots
     fig, axs = plt.subplots(3, 1, figsize=figsize)
@@ -275,7 +283,7 @@ def plot_periodicity(
 
     # plot the phased lightcurve
     axs[2].errorbar(phase, flux, yerr=fluxerr, fmt="o")
-    axs[2].set_title(f"Phased Lightcurve (Period: {best_period / 60 / 60} hours)")
+    axs[2].set_title(f"Phased Lightcurve (Period: {period / 60 / 60} hours)")
     axs[2].set_xlabel("Phase")
 
     # add a title to the entire figure
@@ -289,3 +297,130 @@ def plot_periodicity(
 
     if show_plot:
         plt.show()
+
+
+def plot_folded_photometry_stat_per_bin(
+    candidate: VariabilityCandidate,
+    photometry: List[np.ndarray],
+    period: float = None,
+    num_bins: int = 20,
+    method: str = "median",
+    figsize: tuple = (9, 8),
+    output_path: str = None,
+    show_plot: bool = True,
+    ax=None,
+    line_width: int = 1,
+    title_size: int = 16,
+):
+    method = method.lower()
+    if method not in ["median", "mean"]:
+        raise ValueError("Invalid method. Must be either 'median' or 'mean'")
+    if period is None:
+        period = 1 / candidate.freq
+
+    # remove data points with flux = NaN
+    time, flux, _, _ = remove_nans(
+        photometry[0], photometry[1], photometry[2], photometry[3]
+    )
+
+    phase = (time / (period * 86400)) % 2  # period is converted from days to seconds
+
+    # Create bins and calculate which bin each phase belongs to
+    bin_edges = np.linspace(0, 1, num_bins + 1)
+    bin_indices = np.digitize(phase, bin_edges) - 1  # -1 to make it zero-indexed
+
+    method_flux_per_bin = np.zeros(num_bins)
+    for i in range(num_bins):
+        bin_fluxes = flux[bin_indices == i]
+
+        if len(bin_fluxes) == 0 or np.all(np.isnan(bin_fluxes)):
+            method_flux_per_bin[i] = 0
+        else:
+            if method == "median":
+                method_flux_per_bin[i] = np.median(bin_fluxes)
+            elif method == "mean":
+                method_flux_per_bin[i] = np.mean(bin_fluxes)
+
+    if ax is None:
+        _, ax = plt.subplots(1, 1, figsize=figsize)
+
+    ax.step(
+        np.arange(2 * num_bins),
+        np.concatenate((method_flux_per_bin, method_flux_per_bin)),
+        where="mid",
+        linewidth=line_width,
+        color="black",
+    )
+
+    ax.set_xlabel("Bin Number")
+    ax.set_ylabel("Median Flux")
+    ax.set_title(
+        f"{method.capitalize()} Flux vs Bin Number\nID: {int(candidate.id)} Period: {24/candidate.freq:.4f}",
+        fontsize=title_size,
+    )
+    plt.grid(True)
+
+    if output_path:
+        output_dir = os.path.dirname(output_path)
+        os.makedirs(output_dir, exist_ok=True)
+        plt.savefig(output_path, dpi=300)
+
+    if show_plot:
+        plt.show()
+        plt.close()
+
+
+# just a wrapper with method='median' for plot_photometry_stat_per_bin
+def plot_folded_photometry_median_per_bin(
+    candidate: VariabilityCandidate,
+    photometry: List[np.ndarray],
+    period: float = None,
+    num_bins: int = 20,
+    figsize: tuple = (9, 8),
+    output_path: str = None,
+    show_plot: bool = True,
+    ax=None,
+    line_width: int = 1,
+    title_size: int = 16,
+):
+    plot_folded_photometry_stat_per_bin(
+        candidate,
+        photometry,
+        period,
+        num_bins,
+        "median",
+        figsize,
+        output_path,
+        show_plot,
+        ax,
+        line_width,
+        title_size,
+    )
+
+
+# just a wrapper with method='mean' for plot_photometry_stat_per_bin
+def plot_folded_photometry_mean_per_bin(
+    candidate: VariabilityCandidate,
+    photometry: List[np.ndarray],
+    period: float = None,
+    num_bins: int = 20,
+    figsize: tuple = (9, 8),
+    output_path: str = None,
+    show_plot: bool = True,
+    ax=None,
+    line_width: int = 1,
+    title_size: int = 16,
+):
+    plot_folded_photometry_stat_per_bin(
+        candidate,
+        photometry,
+        period,
+        num_bins,
+        "mean",
+        figsize,
+        output_path,
+        show_plot,
+        ax,
+        line_width,
+        title_size,
+    )
