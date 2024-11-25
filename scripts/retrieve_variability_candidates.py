@@ -38,11 +38,13 @@ if __name__ == "__main__":
                 ratio_valid,
                 freqs,
                 sigs_clean,
+                ccds,
+                quads,
             ) = load_field_periodicity_data_parallel(
                 field, band, periods_path
             )  # Load the data
             candidate_list = get_candidates(
-                psids, ra, dec, ratio_valid, freqs, sigs_clean
+                psids, ra, dec, ratio_valid, freqs, sigs_clean, field, ccds, quads
             )  # Find the candidates
             print("Adding Pan-STARRS xmatch to candidates")
             candidate_list = add_ps1_xmatch_to_candidates(

@@ -264,6 +264,9 @@ def read_lightcurves(ids_per_files, local_path):
             continue
 
     for id, photometry in all_photometry.items():
+        if not photometry:
+            print(f"No photometry for {id} found in any file")
+            continue
         # sort the photometry by time and reshape
         all_photometry[id] = np.array(sorted(photometry, key=lambda x: x[0])).T
         # clean the photometry
@@ -285,12 +288,28 @@ def retrieve_objs_lightcurve(
     remote_path_lc=None,
     bands=FILTERS,
     limit_fields=None,  # limit to specific fields
+    use_position=True,
 ):
     # get files for each object
     ids_per_file = {}
     for candidate in objs:
         psid, ra, dec = candidate.id, candidate.ra, candidate.dec
-        files = get_files_list(ra, dec, "data", bands, limit_fields=limit_fields)
+        if not use_position:
+            field, ccd, quad = candidate.field, candidate.ccd, candidate.quad
+            if field is None or ccd is None or quad is None:
+                raise ValueError(
+                    f"use_position is False, but field, ccd, or quad is None for {psid}. Cannot retrieve lightcurve"
+                )
+            files = [
+                f"{field:04d}/data_{field:04d}_{ccd:02d}_{quad:01d}_z{band}.h5"
+                for band in bands
+            ]
+        else:
+            files = get_files_list(ra, dec, "data", bands, limit_fields=limit_fields)
+        if len(files) == 0:
+            print(f"No files found for {psid}")
+            continue
+
         for file in files:
             if file not in ids_per_file:
                 ids_per_file[file] = set()

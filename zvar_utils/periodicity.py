@@ -8,71 +8,6 @@ import h5py
 import numpy as np
 
 
-def load_field_periodicity_data(
-    field: int, band: int, path: str
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    if not isinstance(field, (int, np.integer, str)):
-        raise ValueError("Field must be an integer or string")
-    if not isinstance(band, (int, np.integer, str)):
-        raise ValueError("Band must be an integer or string")
-    if path is None:
-        raise ValueError("Path must be specified")
-
-    path = os.path.join(
-        os.path.abspath(path), f"{str(field).zfill(4)}", f"fpw_*_z{band}.h5"
-    )
-
-    files = glob.glob(path)
-
-    # maybe we just want to return an empty list if no files are found,
-    # rather than raising an error?
-    if not files:
-        raise ValueError("No files found")
-
-    psids = np.array([], dtype=np.uint64)
-    ratio_valid = np.array([])
-    best_freqs = np.array([])
-    significances = np.array([])
-    ra = np.array([])
-    dec = np.array([])
-    for file in files:
-        if not os.path.isfile(file):
-            print(f"File {file} not found")
-            continue
-        try:
-            with h5py.File(file, "r") as dataset:
-                psids = np.append(psids, np.array(dataset["psids"]))
-                ratio_valid = np.append(ratio_valid, np.array(dataset["valid"]))
-                best_freqs = np.append(best_freqs, np.array(dataset["bestFreqs"]))
-                significances = np.append(
-                    significances, np.array(dataset["significance"])
-                )
-                ra = np.append(ra, np.array(dataset["ra"]))
-                dec = np.append(dec, np.array(dataset["dec"]))
-                print(f"Loaded {file}")
-        except FileNotFoundError:
-            print(f"File {file} not found")
-            continue
-        except OSError:
-            print(f"Error reading file {file}")
-            continue
-        except KeyError as e:
-            print(f"Key not found in file {file}: {e}")
-            continue
-        except Exception as e:
-            print(f"Error reading file {file}: {e}")
-            continue
-
-    if len(psids) == 0:
-        raise ValueError("No data found in files")
-
-    freqs = best_freqs.reshape((len(psids), 3, 50))
-    sigs = significances.reshape((len(psids), 3, 50))
-    sigs_clean = np.nan_to_num(sigs, nan=0, posinf=0, neginf=0)
-
-    return psids, ra, dec, ratio_valid, freqs, sigs_clean
-
-
 def load_file(file):
     try:
         psids = np.array([], dtype=np.uint64)
@@ -108,9 +43,24 @@ def load_file(file):
         return file, None
 
 
+def get_ccd_quad_from_filename(file_name):
+    ccd = int(file_name.split("_")[-3])
+    quad = int(file_name.split("_")[-2])
+    return ccd, quad
+
+
 def load_field_periodicity_data_parallel(
     field: int, band: int, path: str
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+) -> Tuple[
+    np.ndarray,
+    np.ndarray,
+    np.ndarray,
+    np.ndarray,
+    np.ndarray,
+    np.ndarray,
+    np.ndarray,
+    np.ndarray,
+]:
     if not isinstance(field, (int, np.integer, str)):
         raise ValueError("Field must be an integer or string")
     if not isinstance(band, (int, np.integer, str)):
@@ -157,13 +107,19 @@ def load_field_periodicity_data_parallel(
     best_freqs = np.empty(sum(len(data[4]) for data in data_per_file))
     significances = np.empty(sum(len(data[5]) for data in data_per_file))
 
+    # we also want arrays of ccd and quadrant numbers, to keep track of where the data comes from
+    ccds = np.empty(sum(len(data[0]) for data in data_per_file), dtype=np.uint8)
+    quads = np.empty(sum(len(data[0]) for data in data_per_file), dtype=np.uint8)
+
     current_idx_psids = 0
     current_idx_ra = 0
     current_idx_dec = 0
     current_idx_ratio_valid = 0
     current_idx_best_freqs = 0
     current_idx_significances = 0
-    for data in tqdm(data_per_file, desc="Processing data"):
+    for i, data in tqdm(
+        enumerate(data_per_file), desc="Processing data", total=len(data_per_file)
+    ):
         # now we don't append to the arrays, but rather insert the data at the correct positions
         psids[current_idx_psids : current_idx_psids + len(data[0])] = data[0]
         ra[current_idx_ra : current_idx_ra + len(data[1])] = data[1]
@@ -178,6 +134,11 @@ def load_field_periodicity_data_parallel(
             current_idx_significances : current_idx_significances + len(data[5])
         ] = data[5]
 
+        file_name = files[i]
+        ccd, quad = get_ccd_quad_from_filename(file_name)
+        ccds[current_idx_psids : current_idx_psids + len(data[0])] = ccd
+        quads[current_idx_psids : current_idx_psids + len(data[0])] = quad
+
         current_idx_psids += len(data[0])
         current_idx_ra += len(data[1])
         current_idx_dec += len(data[2])
@@ -191,4 +152,4 @@ def load_field_periodicity_data_parallel(
     freqs = best_freqs.reshape((len(psids), 3, 50))
     sigs = significances.reshape((len(psids), 3, 50))
 
-    return psids, ra, dec, ratio_valid, freqs, sigs
+    return psids, ra, dec, ratio_valid, freqs, sigs, ccds, quads
