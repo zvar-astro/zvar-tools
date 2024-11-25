@@ -140,6 +140,9 @@ class VariabilityCandidate:
         freq,
         fap,
         best_M,
+        field: int = None,
+        ccd: int = None,
+        quad: int = None,
         ps1: Union[PS1Match, dict] = None,
         gaia: Union[GaiaMatch, dict] = None,
         twomass: Union[TwoMASSMatch, dict] = None,
@@ -152,6 +155,9 @@ class VariabilityCandidate:
         self.freq = freq
         self.fap = fap
         self.best_M = best_M
+        self.field = field
+        self.ccd = ccd
+        self.quad = quad
         self.set_ps1(ps1)
         self.set_gaia(gaia)
         self.set_2mass(twomass)
@@ -212,6 +218,11 @@ class VariabilityCandidate:
     def __repr__(self):
         return (
             f"ID: {self.id}, RA: {self.ra}, Dec: {self.dec}, Valid: {self.valid}, Best M: {self.best_M}, freq: {self.freq}, FAP: {self.fap}"
+            + (
+                f" (field: {self.field}, ccd: {self.ccd}, quad: {self.quad})"
+                if self.field and self.ccd and self.quad
+                else ""
+            )
             + (f"\n    PS1: {self.ps1}" if self.ps1 else "")
             + (f"\n    Gaia: {self.gaia}" if self.gaia else "")
             + (f"\n    2MASS: {self.twomass}" if self.twomass else "")
@@ -226,6 +237,9 @@ def get_candidates(
     ratio_valid: np.ndarray,
     freqs: np.ndarray,
     sigs: np.ndarray,
+    field: int,
+    ccds: np.ndarray,
+    quads: np.ndarray,
 ) -> List[VariabilityCandidate]:
     # Precompute the CDFs for each bin
     cdfs = [get_cdf(sigs[:, j, 0]) for j in range(3)]
@@ -271,6 +285,9 @@ def get_candidates(
                     freqs[i, :, 0],
                     probabilities,
                     best_M,
+                    field,
+                    ccds[i],
+                    quads[i],
                 )
             )
 
@@ -460,6 +477,9 @@ def export_to_parquet(
             "dec": candidate.dec,
             "valid": candidate.valid,
             "best_M": candidate.best_M,
+            "field": candidate.field,
+            "ccd": candidate.ccd,
+            "quad": candidate.quad,
             "frequency_20": candidate.freq[0],
             "frequency_10": candidate.freq[1],
             "frequency_5": candidate.freq[2],
@@ -517,7 +537,7 @@ def import_from_parquet(path: str, best_m_only=True) -> List[VariabilityCandidat
     df = pd.read_parquet(path)
     candidate_list = []
 
-    for index, row in df.iterrows():
+    for _, row in df.iterrows():
         ps1_data = (
             {
                 key.replace("ps_", ""): row[key]
@@ -570,6 +590,9 @@ def import_from_parquet(path: str, best_m_only=True) -> List[VariabilityCandidat
                 ),
                 fap=np.array([row["FAP_20"], row["FAP_10"], row["FAP_5"]]),
                 best_M=row["best_M"],
+                field=row.get("field"),
+                ccd=row.get("ccd"),
+                quad=row.get("quad"),
                 ps1=ps1_data,
                 gaia=gaia_data,
                 twomass=twomass_data,
@@ -590,6 +613,9 @@ def import_from_parquet(path: str, best_m_only=True) -> List[VariabilityCandidat
                 freq=row[BIN_IDX_TO_FREQ_COL[bin_idx]],
                 fap=row[BIN_IDX_TO_FAP_COL[bin_idx]],
                 best_M=row["best_M"],
+                field=row.get("field"),
+                ccd=row.get("ccd"),
+                quad=row.get("quad"),
                 ps1=ps1_data,
                 gaia=gaia_data,
                 twomass=twomass_data,

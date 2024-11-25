@@ -15,26 +15,26 @@ To get started with this project, you need to have Python installed on your mach
    cd ZVAR-Utilities
    ```
 
-2. Create a virtual environment:
+2. Create a virtual environment, with [uv](https://docs.astral.sh/uv/getting-started/installation/):
 
    ```sh
-   python3 -m venv venv
-   source venv/bin/activate
+   uv venv env --python=python3.10
+   source env/bin/activate
    ```
 
-   **Note:** You can also use conda, or any other virtual environment manager of your choice.
+   **Note:** You can also use conda, virtualenv, or any other virtual environment manager of your choice.
 
 3. Install the required dependencies:
 
    ```sh
-   pip install -r requirements.txt
+   uv pip install -r requirements.txt
    ```
 
 4. Install the `fpw` package:
    The `fpw` package is not available on PyPI yet, so you will need to install it manually. To do so, first request access to the pre-compiled `.whl` files from the ZVAR team (tdulaz@caltech.edu, or sewhitebook@astro.caltech.edu). We'll provide a `.zip` file with the `.whl` files. Unzip the file and cd into the directory. Then, install the `.whl` file that corresponds to your Python version, operating system, and architecture.
    For example, if you are using Python 3.10 on a Mac with an M1 chip, you would run:
    ```sh
-   pip install fpw-0.0.0-cp310-cp310-macosx_11_0_arm64.whl
+   uv pip install fpw-0.0.0-cp310-cp310-macosx_11_0_arm64.whl "numpy<2"
    ```
 
 ## Usage
@@ -60,7 +60,7 @@ Example: `fpw_0001_01_1_zfilter.h5`.
 Once you have the FPW periods, you can run the following command to generate the CSV file:
 
 ```sh
-PYTHONPATH=. python scripts/retrieve_variability_candidates.py --field_min=279 --field_max=279 --bands=r --radius=2.0 --periods_path=/path/to/periods/directory --output_path=/path/to/output/directory --credentials_path=/path/to/credentials/file
+PYTHONPATH=. python scripts/retrieve_variability_candidates.py --field_min=279 --field_max=279 --bands=r,g --radius=3.0 --periods_path=/path/to/periods/directory --output_path=/path/to/output/directory --credentials_path=/path/to/credentials/file
 ```
 
 where:
