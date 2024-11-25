@@ -5,7 +5,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 from astropy.table import Table
 from matplotlib.colors import LogNorm
-from matplotlib.gridspec import GridSpec
 
 from zvar_utils.candidate import VariabilityCandidate
 from zvar_utils.enums import ALLOWED_BANDS
@@ -22,6 +21,8 @@ def plot_gaia_cmd(
     figsize: tuple = (9, 8),
     output_path: str = None,
     show_plot: bool = True,
+    ax=None,
+    title_size: int = 16,
 ):
     if not isinstance(candidate_list, list):
         raise ValueError("Candidates must be provided as a list")
@@ -90,10 +91,8 @@ def plot_gaia_cmd(
         gaia_sample.parallax.values / 100
     )
 
-    # Overplot candidates on the Gaia HR Diagram
-    figa = plt.figure("a", figsize=figsize)
-    gs = GridSpec(1, 1)
-    ax = figa.add_subplot(gs[0])
+    if ax is None:
+        _, ax = plt.subplots(1, 1, figsize=figsize)
 
     # Plot 2D-Histogram of 200pc sample
     ax.hist2d(
@@ -133,12 +132,12 @@ def plot_gaia_cmd(
 
     # Add colorbar
     cbar = plt.colorbar(sc, ax=ax)
-    cbar.set_label("Period (log days)", fontsize=16)
+    cbar.set_label("Period (log days)", fontsize=title_size)
 
     # Set plot appearances
-    ax.set_title("Gaia HR Diagram with Variability Candidates", fontsize=16)
-    ax.set_ylabel("$M_G$ (mag)", fontsize=16)
-    ax.set_xlabel("$BP-RP$ (mag)", fontsize=16)
+    ax.set_title("Gaia HR Diagram with Variability Candidates", fontsize=title_size)
+    ax.set_ylabel("$M_G$ (mag)", fontsize=title_size)
+    ax.set_xlabel("$BP-RP$ (mag)", fontsize=title_size)
     # ax.set_xlim(-1.0, 4.5)
     ax.set_ylim(17.0, -2.0)
     ax.set_yticks([0, 5, 10, 15])
