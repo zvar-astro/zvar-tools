@@ -1,5 +1,5 @@
 import os
-from typing import List
+from typing import List, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -174,6 +174,8 @@ def plot_folded_lightcurve(
     ax=None,
     marker_size: int = 4,
     title_size: int = 16,
+    bins: Union[int, None] = None,
+    bin_method: str = "mean",
 ):
     if period is None:
         period = 1 / candidate.freq
@@ -210,19 +212,53 @@ def plot_folded_lightcurve(
     if ax is None:
         _, ax = plt.subplots(1, 1, figsize=figsize)
 
-    for band in bands:
-        mask = filters == band
-        if not np.any(mask):
-            continue
-        ax.errorbar(
-            phase[mask],
-            flux[mask],
-            yerr=fluxerr[mask],
-            fmt="o",
-            label=band,
-            color=BAND_TO_COLOR[band],
-            ms=marker_size,
-        )
+    if bins is not None:
+        # Create bins and calculate which bin each phase belongs to
+        bin_indices = np.digitize(phase, np.linspace(0, 2, bins + 1)) - 1
+
+        # we bin the points per band
+        binned_flux = np.zeros((len(bands), bins))
+        binned_fluxerr = np.zeros((len(bands), bins))
+        for i, band in enumerate(bands):
+            for j in range(bins):
+                mask = (filters == band) & (bin_indices == j)
+                if bin_method == "mean":
+                    binned_flux[i, j] = np.mean(flux[mask])
+                    binned_fluxerr[i, j] = np.sqrt(np.sum(fluxerr[mask] ** 2)) / np.sum(
+                        mask
+                    )
+                elif bin_method == "median":
+                    binned_flux[i, j] = np.median(flux[mask])
+                    binned_fluxerr[i, j] = np.median(fluxerr[mask])
+                else:
+                    raise ValueError(
+                        "Invalid bin_method. Must be either 'mean' or 'median'"
+                    )
+
+        for i, band in enumerate(bands):
+            ax.errorbar(
+                np.arange(bins),
+                binned_flux[i],
+                yerr=binned_fluxerr[i],
+                fmt="o",
+                label=BAND_IDX_TO_NAME[band],
+                color=BAND_TO_COLOR[band],
+                ms=marker_size,
+            )
+    else:
+        for band in bands:
+            mask = filters == band
+            if not np.any(mask):
+                continue
+            ax.errorbar(
+                phase[mask],
+                flux[mask],
+                yerr=fluxerr[mask],
+                fmt="o",
+                label=band,
+                color=BAND_TO_COLOR[band],
+                ms=marker_size,
+            )
     # ax.errorbar(phase, flux, yerr=fluxerr, fmt="o", color="black", ms=3)
     ax.set_xlabel("Phase")
     ax.set_ylabel("Flux")
