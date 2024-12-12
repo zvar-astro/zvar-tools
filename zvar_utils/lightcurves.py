@@ -192,7 +192,7 @@ def read_lightcurves(ids_per_files, local_path):
 
                 for id in ids:
                     idx = np.where(sources["gaia_id"] == id)[0]
-                    if not idx:
+                    if len(idx) == 0:
                         continue
                     idx = idx[0]
 
@@ -326,3 +326,95 @@ def retrieve_objs_lightcurve(
     lightcurves_per_obj = read_lightcurves(ids_per_file, path_lc)
 
     return lightcurves_per_obj
+
+
+def minify_lightcurve(
+    field, ccd, quad, bands, psids, path_lc, out_dir_lc=None, delete_existing=False
+):
+    # given a path to a lightcurve file and a list of psids,
+    # create a "minified" version of the lightcurve file containing only the photometry for the given psids
+    if len(psids) == 0:
+        raise ValueError("psids must be provided")
+    if path_lc is None:
+        raise ValueError("path_lc must be provided")
+    if field is None or ccd is None or quad is None:
+        raise ValueError("field, ccd, and quad must be provided")
+    if out_dir_lc is None:
+        raise ValueError("out_dir must be provided")
+
+    if not os.path.isdir(path_lc):
+        raise ValueError(f"path_lc {path_lc} does not exist")
+
+    if not os.path.isdir(out_dir_lc):
+        os.makedirs(out_dir_lc)
+
+    if bands is None:
+        bands = FILTERS
+
+    psids = np.array(psids, dtype=np.uint64)
+    # deduplicate if necessary
+    psids = np.unique(psids)
+
+    for band in bands:
+        path = f"{path_lc}/{field:04d}/data_{field:04d}_{ccd:02d}_{quad:01d}_z{band}.h5"
+        # check if the file exists
+        if not os.path.isfile(path):
+            print(f"File {path} does not exist")
+            continue
+
+        with h5py.File(path, "r") as f:
+            data = f["data"]
+            sources = data["sources"]
+            sourcedata = data["sourcedata"]
+            exposures = data["exposures"]
+
+            # check for each psid one by one
+            for psid in psids:
+                if psid not in sources["gaia_id"]:
+                    print(f"Source {psid} not found in {field}, {ccd}, {quad}, {band}")
+                    continue
+
+            idxs = np.where(np.isin(sources["gaia_id"], psids))[0]
+
+            new_sources = sources[idxs]
+            new_sourcedata = []
+            for idx in idxs:
+                start, end = idx * exposures.shape[0], (idx + 1) * exposures.shape[0]
+                new_sourcedata.extend(sourcedata[start:end])
+            new_sourcedata = np.array(new_sourcedata, order="C")
+
+            new_exposures = exposures[
+                :
+            ]  # should be identical to the original exposures
+
+            assert new_sources.shape[0] * exposures.shape[0] == new_sourcedata.shape[0]
+            assert new_sources.shape[0] <= len(psids)
+            assert new_exposures.shape[0] == exposures.shape[0]
+
+            if new_sources.shape[0] == 0:
+                print(f"No sources found for {field}, {ccd}, {quad}, {band}")
+                continue
+
+            if new_sources.shape[0] != len(psids):
+                print(
+                    f"Only {new_sources.shape[0]} sources found for {field}, {ccd}, {quad}, {band} instead of {len(psids)}"
+                )
+
+        del sources, sourcedata, exposures, data
+
+        new_path = (
+            f"{out_dir_lc}/{field:04d}/data_{field:04d}_{ccd:02d}_{quad:01d}_z{band}.h5"
+        )
+        if not os.path.isdir(f"{out_dir_lc}/{field:04d}"):
+            os.makedirs(f"{out_dir_lc}/{field:04d}")
+
+        if os.path.isfile(new_path) and delete_existing:
+            os.remove(new_path)
+
+        with h5py.File(new_path, "w") as f:
+            data = f.create_group("data")
+            data.create_dataset("sources", data=new_sources)
+            data.create_dataset("sourcedata", data=new_sourcedata)
+            data.create_dataset("exposures", data=new_exposures)
+
+    return
