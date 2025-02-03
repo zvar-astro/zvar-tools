@@ -15,7 +15,15 @@ To get started with this project, you need to have Python installed on your mach
    cd ZVAR-Utilities
    ```
 
-2. Create a virtual environment, with [uv](https://docs.astral.sh/uv/getting-started/installation/):
+2. Fetch the demo_data submodule:
+
+   ```sh
+   git submodule update --init --recursive
+   ```
+
+   _If this command isn't recognized, you may need to update your git version or install [git-lfs](https://docs.github.com/en/repositories/working-with-files/managing-large-files/installing-git-large-file-storage)._
+
+3. Create a virtual environment, with [uv](https://docs.astral.sh/uv/getting-started/installation/):
 
    ```sh
    uv venv env --python=python3.10
@@ -24,13 +32,13 @@ To get started with this project, you need to have Python installed on your mach
 
    **Note:** You can also use conda, virtualenv, or any other virtual environment manager of your choice.
 
-3. Install the required dependencies:
+4. Install the required dependencies:
 
    ```sh
    uv pip install -r requirements.txt
    ```
 
-4. Install the `fpw` package:
+5. Install the `fpw` package:
    The `fpw` package is not available on PyPI yet, so you will need to install it manually. To do so, first request access to the pre-compiled `.whl` files from the ZVAR team (tdulaz@caltech.edu, or sewhitebook@astro.caltech.edu). We'll provide a `.zip` file with the `.whl` files. Unzip the file and cd into the directory. Then, install the `.whl` file that corresponds to your Python version, operating system, and architecture.
    For example, if you are using Python 3.10 on a Mac with an M1 chip, you would run:
    ```sh
