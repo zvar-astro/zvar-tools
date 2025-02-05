@@ -1,0 +1,23 @@
+[project]
+name = "zvartools"
+version = "0.1.0"
+description = "A collection of tools for working with ZVAR data."
+readme = "README.md"
+requires-python = ">=3.9,<3.12"
+dependencies = [
+    "numpy<2",
+    "pandas",
+    "astropy",
+    "penquins",
+    "pre-commit",
+    "paramiko",
+    "scp",
+    "pyarrow",
+    "fastparquet",
+    "numba",
+    "scipy",
+    "h5py",
+    "tqdm",
+    "matplotlib",
+    "fpwperiodic"
+]

@@ -222,6 +222,11 @@ def plot_folded_lightcurve(
         for i, band in enumerate(bands):
             for j in range(bins):
                 mask = (filters == band) & (bin_indices == j)
+                # if there are no points in the bin, we set the flux to -inf
+                if not np.any(mask):
+                    binned_flux[i, j] = -np.inf
+                    binned_fluxerr[i, j] = -np.inf
+                    continue
                 if bin_method == "mean":
                     binned_flux[i, j] = np.mean(flux[mask])
                     binned_fluxerr[i, j] = np.sqrt(np.sum(fluxerr[mask] ** 2)) / np.sum(
@@ -235,9 +240,16 @@ def plot_folded_lightcurve(
                         "Invalid bin_method. Must be either 'mean' or 'median'"
                     )
 
+        # # remove bins with no data
+        mask = np.all(binned_flux != -np.inf, axis=0)
+        binned_flux = binned_flux[:, mask]
+        binned_fluxerr = binned_fluxerr[:, mask]
+        x = np.arange(bins)
+        x = x[mask]
+
         for i, band in enumerate(bands):
             ax.errorbar(
-                np.arange(bins),
+                x,
                 binned_flux[i],
                 yerr=binned_fluxerr[i],
                 fmt="o",
