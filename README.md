@@ -35,15 +35,10 @@ To get started with this project, you need to have Python installed on your mach
 4. Install the required dependencies:
 
    ```sh
-   uv pip install -r requirements.txt
+   uv sync
    ```
 
-5. Install the `fpw` package:
-   The `fpw` package is not available on PyPI yet, so you will need to install it manually. To do so, first request access to the pre-compiled `.whl` files from the ZVAR team (tdulaz@caltech.edu, or sewhitebook@astro.caltech.edu). We'll provide a `.zip` file with the `.whl` files. Unzip the file and cd into the directory. Then, install the `.whl` file that corresponds to your Python version, operating system, and architecture.
-   For example, if you are using Python 3.10 on a Mac with an M1 chip, you would run:
-   ```sh
-   uv pip install fpw-0.0.0-cp310-cp310-macosx_11_0_arm64.whl "numpy<2"
-   ```
+   _You can rerun this command whenever you want to update the dependencies._
 
 ## Usage
 
