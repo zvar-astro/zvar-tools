@@ -143,6 +143,7 @@ class VariabilityCandidate:
         field: int = None,
         ccd: int = None,
         quad: int = None,
+        band: str = None,
         ps1: Union[PS1Match, dict] = None,
         gaia: Union[GaiaMatch, dict] = None,
         twomass: Union[TwoMASSMatch, dict] = None,
