@@ -1,5 +1,5 @@
-from zvar_utils.candidate import VariabilityCandidate
-from zvar_utils.kowalski import (
+from zvartools.candidate import VariabilityCandidate
+from zvartools.external import (
     connect_to_kowalski,
     query_gaia,
     query_ps1,
