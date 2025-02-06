@@ -1,0 +1,23 @@
+# Github actions to build
+# and push wheel files
+on:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  build_wheel:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install the latest version of uv
+        uses: astral-sh/setup-uv@v5
+      - name: Install Python and dependencies
+        run: |
+          uv venv --python=python3.11
+          source venv/bin/activate
+          uv sync
+      - name: Build wheel
+        run: |
+          uv build

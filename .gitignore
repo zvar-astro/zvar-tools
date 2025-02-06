@@ -7,3 +7,8 @@ FPW_Wheels.zip
 data_**.h5
 fpw_**.h5
 src/zvartools.egg-info/
+.pytest_cache/
+.ruff_cache/
+.venv
+dist
+experimental
