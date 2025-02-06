@@ -1,6 +1,6 @@
 import numpy as np
 
-from zvar_utils.candidate import (
+from zvartools.candidate import (
     get_candidates,
     export_to_parquet,
     add_gaia_xmatch_to_candidates,
@@ -8,9 +8,9 @@ from zvar_utils.candidate import (
     add_2mass_xmatch_to_candidates,
     add_allwise_xmatch_to_candidates,
 )
-from zvar_utils.kowalski import connect_to_kowalski
-from zvar_utils.parsers import candidates_parser, validate_candidates_args
-from zvar_utils.periodicity import load_field_periodicity_data_parallel
+from zvartools.external import connect_to_kowalski
+from zvartools.parsers import candidates_parser, validate_candidates_args
+from zvartools.periodicity import load_field_periodicity_data_parallel
 
 if __name__ == "__main__":
     parser = candidates_parser()
