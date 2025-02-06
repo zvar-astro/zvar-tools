@@ -15,7 +15,7 @@ jobs:
       - name: Install Python and dependencies
         run: |
           uv venv --python=python3.11
-          source venv/bin/activate
+          source .venv/bin/activate
           uv sync
       - name: Build wheel
         run: |
