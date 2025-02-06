@@ -37,6 +37,7 @@ To get started with this project, you need to have Python installed on your mach
    ```sh
    uv sync
    ```
+
    _You can rerun this command whenever you want to update the dependencies._
 
 ## Usage
