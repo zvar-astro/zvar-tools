@@ -96,7 +96,7 @@ class BaseDataSource:
                 available, missing = self.check_file_availability(data, type)
 
         if len(missing) > 0 and self.verbose:
-            print(f"Missing {len(missing)} files")
+            print(f"Missing {len(missing)} {type} files")
 
         return available
 
@@ -108,7 +108,7 @@ class BaseDataSource:
         )
 
     @staticmethod
-    def read_lightcurve_by_idx(idx, sources_data, times, band):
+    def read_lightcurve_by_idx(idx, sources_data, times, band, zeropoints, exptimes):
         nb_exposures = len(times)
         start, end = idx * nb_exposures, (idx + 1) * nb_exposures
 
@@ -116,7 +116,9 @@ class BaseDataSource:
 
         photometry = []
         for i in range(nb_exposures):
-            if int(raw_photometry[i][2]) == 1:
+            if (
+                int(raw_photometry[i][2]) == 1
+            ):  # if the source is not detected in this exposure
                 photometry.append(
                     [
                         times[i],
@@ -125,12 +127,19 @@ class BaseDataSource:
                         FILTER2IDX[band],
                     ]
                 )
-            else:
+            else:  # if the source is detected in this exposure
+                flux_jy, flux_err_jy = BaseDataSource.adu_to_jansky(
+                    float(raw_photometry[i][0]),
+                    float(raw_photometry[i][1]),
+                    exptimes[i],
+                    zeropoints[i],
+                )
+                # we convert to microJy
                 photometry.append(
                     [
                         times[i],
-                        float(raw_photometry[i][0]),
-                        float(raw_photometry[i][1]),
+                        flux_jy * 1e6,
+                        flux_err_jy * 1e6,
                         FILTER2IDX[band],
                     ]
                 )
@@ -158,6 +167,20 @@ class BaseDataSource:
         except Exception as e:
             print(f"Error reading period for {idx}: {e}")
             return None, None, None, None
+
+    @staticmethod
+    def merge_lightcurves(lightcurve_per_psid):
+        for id, photometry in lightcurve_per_psid.items():
+            if not photometry:
+                print(f"No photometry for {id} found in any file")
+                continue
+            lightcurve_per_psid[id] = np.array(sorted(photometry, key=lambda x: x[0])).T
+            lightcurve_per_psid[id] = process_curve(*lightcurve_per_psid[id])
+            lightcurve_per_psid[id] = remove_deep_drilling(*lightcurve_per_psid[id])
+
+            lightcurve_per_psid[id] = np.array(lightcurve_per_psid[id], order="C")
+
+        return lightcurve_per_psid
 
     def cone_search(self, targets, radius=2.0, max_matches=None):
         fieldccdquad2radec = {}
@@ -214,16 +237,16 @@ class BaseDataSource:
             with h5py.File(lightcurve_file_path, "r") as f:
                 data = f["data"]
                 sources: h5py.Dataset = data["sources"]
-                # print the column names for sources
-                print(list(sources.dtype.names))
-                # print the first row
-                print(sources[0])
+
                 for ra, dec in fieldccdquad2radec[(field, ccd, quad)]:
                     distances = great_circle_distance(
                         ra, dec, sources["ra"], sources["decl"]
                     )
                     # TODO: if max_matches is defined, limit the nb of results returned.
                     matches = distances < radius / 3600
+                    if max_matches:
+                        # sort by distance and take the first max_matches
+                        matches = np.argsort(distances)[0:max_matches]
                     for i in np.where(matches)[0]:
                         psid = sources["gaia_id"][i]
                         radec2sources[(ra, dec)].append(
@@ -243,7 +266,12 @@ class BaseDataSource:
 
                 for i, psid in matched_idx:
                     lc = self.read_lightcurve_by_idx(
-                        i, data["sourcedata"], data["exposures"]["bjd"], band
+                        i,
+                        data["sourcedata"],
+                        data["exposures"]["bjd"],
+                        band,
+                        data["exposures"]["mzpsci"],
+                        data["exposures"]["exptime"],
                     )
                     lightcurve_per_psid[psid].extend(lc)
 
@@ -287,30 +315,22 @@ class BaseDataSource:
                         **radec2sources[key][i],
                         **periods_per_psid[(psid, radec2sources[key][i]["band"])][0],
                     }
-                    # convert them into VariabilityCandidate objects
-                    radec2sources[key][i] = VariabilityCandidate(
-                        psid=psid,
-                        ra=radec2sources[key][i]["ra"],
-                        dec=radec2sources[key][i]["dec"],
-                        band=radec2sources[key][i]["band"],
-                        freq=radec2sources[key][i]["freq"],
-                        fap=radec2sources[key][i]["significance"],
-                        best_M=radec2sources[key][i]["best_M"],
-                        field=radec2sources[key][i]["field"],
-                        ccd=radec2sources[key][i]["ccd"],
-                        quad=radec2sources[key][i]["quad"],
-                        valid=radec2sources[key][i]["valid"],
-                    )
+                # convert them into VariabilityCandidate objects
+                radec2sources[key][i] = VariabilityCandidate(
+                    psid=psid,
+                    ra=radec2sources[key][i]["ra"],
+                    dec=radec2sources[key][i]["dec"],
+                    band=radec2sources[key][i].get("band", None),
+                    freq=radec2sources[key][i].get("freq", None),
+                    fap=radec2sources[key][i].get("significance", None),
+                    best_M=radec2sources[key][i].get("best_M", None),
+                    field=radec2sources[key][i].get("field", None),
+                    ccd=radec2sources[key][i].get("ccd", None),
+                    quad=radec2sources[key][i].get("quad", None),
+                    valid=radec2sources[key][i].get("valid", None),
+                )
 
-        for id, photometry in lightcurve_per_psid.items():
-            if not photometry:
-                print(f"No photometry for {id} found in any file")
-                continue
-            lightcurve_per_psid[id] = np.array(sorted(photometry, key=lambda x: x[0])).T
-            lightcurve_per_psid[id] = process_curve(*lightcurve_per_psid[id])
-            lightcurve_per_psid[id] = remove_deep_drilling(*lightcurve_per_psid[id])
-
-            lightcurve_per_psid[id] = np.array(lightcurve_per_psid[id], order="C")
+        lightcurve_per_psid = self.merge_lightcurves(lightcurve_per_psid)
 
         return radec2sources, lightcurve_per_psid
 
@@ -364,7 +384,12 @@ class BaseDataSource:
                         continue
                     idx = idx[0]
                     lc = self.read_lightcurve_by_idx(
-                        idx, data["sourcedata"], data["exposures"]["bjd"], band
+                        idx,
+                        data["sourcedata"],
+                        data["exposures"]["bjd"],
+                        band,
+                        data["exposures"]["mzpsci"],
+                        data["exposures"]["exptime"],
                     )
                     if psid not in lightcurve_per_psid:
                         lightcurve_per_psid[psid] = []
@@ -404,15 +429,7 @@ class BaseDataSource:
                         "valid": valid,
                     }
 
-        for id, photometry in lightcurve_per_psid.items():
-            if not photometry:
-                print(f"No photometry for {id} found in any file")
-                continue
-            lightcurve_per_psid[id] = np.array(sorted(photometry, key=lambda x: x[0])).T
-            lightcurve_per_psid[id] = process_curve(*lightcurve_per_psid[id])
-            lightcurve_per_psid[id] = remove_deep_drilling(*lightcurve_per_psid[id])
-
-            lightcurve_per_psid[id] = np.array(lightcurve_per_psid[id], order="C")
+        lightcurve_per_psid = self.merge_lightcurves(lightcurve_per_psid)
 
         # then create the VariabilityCandidate objects
         candidates = {}
@@ -446,11 +463,16 @@ class BaseDataSource:
             )
 
         data_to_recover = []
-        fieldccdquad2psid = {}
         for candidate in candidates:
-            data_to_recover.append(
-                (candidate.field, candidate.ccd, candidate.quad, candidate.band)
-            )
+            if candidate.band is None:
+                for band in ["g", "r"]:
+                    data_to_recover.append(
+                        (candidate.field, candidate.ccd, candidate.quad, band)
+                    )
+            else:
+                data_to_recover.append(
+                    (candidate.field, candidate.ccd, candidate.quad, candidate.band)
+                )
 
         available_lightcurves = self.get_files(data_to_recover, type="lightcurve")
 
@@ -467,21 +489,18 @@ class BaseDataSource:
                         continue
                     idx = idx[0]
                     lc = self.read_lightcurve_by_idx(
-                        idx, data["sourcedata"], data["exposures"]["bjd"], band
+                        idx,
+                        data["sourcedata"],
+                        data["exposures"]["bjd"],
+                        band,
+                        data["exposures"]["mzpsci"],
+                        data["exposures"]["exptime"],
                     )
                     if candidate.psid not in lightcurve_per_psid:
                         lightcurve_per_psid[candidate.psid] = []
                     lightcurve_per_psid[candidate.psid].extend(lc)
 
-        for id, photometry in lightcurve_per_psid.items():
-            if not photometry:
-                print(f"No photometry for {id} found in any file")
-                continue
-            lightcurve_per_psid[id] = np.array(sorted(photometry, key=lambda x: x[0])).T
-            lightcurve_per_psid[id] = process_curve(*lightcurve_per_psid[id])
-            lightcurve_per_psid[id] = remove_deep_drilling(*lightcurve_per_psid[id])
-
-            lightcurve_per_psid[id] = np.array(lightcurve_per_psid[id], order="C")
+        lightcurve_per_psid = self.merge_lightcurves(lightcurve_per_psid)
 
         return lightcurve_per_psid
 
