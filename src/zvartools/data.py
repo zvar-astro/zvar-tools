@@ -23,11 +23,10 @@ from zvartools.candidate import (
 
 
 class BaseDataSource:
-    def __init__(self, local_lightcurve_path, local_period_path, **kwargs):
-        self.local_lightcurve_path = local_lightcurve_path
-        self.local_period_path = local_period_path
-        self.kwargs = kwargs
-        self.verbose = kwargs.get("verbose", False)
+    @staticmethod
+    def add_kowalski(**kwargs):
+        # if the is a kowalski_protocol, kowalski_host, kowalski_port, kowalski_token
+        # or kowalski_user and kowalski_password, we should add a Kowalski instance
         if (
             kwargs.get("kowalski_protocol")
             and kwargs.get("kowalski_host")
@@ -54,12 +53,20 @@ class BaseDataSource:
                 )
             else:
                 raise ValueError("Kowalski credentials not provided")
-            self.kowalski = k
+            return k
+        return None
+
+    def __init__(self, local_lightcurve_path, local_period_path, **kwargs):
+        self.local_lightcurve_path = local_lightcurve_path
+        self.local_period_path = local_period_path
+        self.kwargs = kwargs
+        self.verbose = kwargs.get("verbose", False)
 
         self.implements = {
             "check_file_availability",
             "get_files",
         }
+        self.kowalski = self.add_kowalski(**kwargs)
 
     def check_file_availability(
         self, data: Tuple[int, int, int, str], type="lightcurve"
@@ -504,7 +511,7 @@ class BaseDataSource:
 
         return lightcurve_per_psid
 
-    def add_gaia_data_to_candidates(self, candidates, radius=3.0):
+    def validate_add_data_parameters(self, candidates, catalog_name):
         if not isinstance(candidates, (list, tuple)) and all(
             isinstance(c, VariabilityCandidate) for c in candidates
         ):
@@ -514,54 +521,23 @@ class BaseDataSource:
 
         if self.kowalski is None:
             raise ValueError(
-                "Kowalski instance not provided, required for adding Gaia xmatch to candidates"
+                f"Kowalski instance not provided, required to add {catalog_name} data to candidates"
             )
 
+    def add_gaia_data_to_candidates(self, candidates, radius=3.0):
+        self.validate_add_data_parameters(candidates, "Gaia")
         return add_gaia_xmatch_to_candidates(self.kowalski, candidates, radius)
 
     def add_ps1_data_to_candidates(self, candidates):
-        if not isinstance(candidates, (list, tuple)) and all(
-            isinstance(c, VariabilityCandidate) for c in candidates
-        ):
-            raise ValueError(
-                "Candidates should be a list of VariabilityCandidate objects"
-            )
-
-        if self.kowalski is None:
-            raise ValueError(
-                "Kowalski instance not provided, required for adding Pan-STARRS xmatch to candidates"
-            )
-
+        self.validate_add_data_parameters(candidates, "Pan-STARRs")
         return add_ps1_xmatch_to_candidates(self.kowalski, candidates)
 
     def add_allwise_data_to_candidates(self, candidates, radius=3.0):
-        if not isinstance(candidates, (list, tuple)) and all(
-            isinstance(c, VariabilityCandidate) for c in candidates
-        ):
-            raise ValueError(
-                "Candidates should be a list of VariabilityCandidate objects"
-            )
-
-        if self.kowalski is None:
-            raise ValueError(
-                "Kowalski instance not provided, required for adding AllWISE xmatch to candidates"
-            )
-
+        self.validate_add_data_parameters(candidates, "AllWISE")
         return add_allwise_xmatch_to_candidates(self.kowalski, candidates, radius)
 
     def add_2mass_data_to_candidates(self, candidates, radius=3.0):
-        if not isinstance(candidates, (list, tuple)) and all(
-            isinstance(c, VariabilityCandidate) for c in candidates
-        ):
-            raise ValueError(
-                "Candidates should be a list of VariabilityCandidate objects"
-            )
-
-        if self.kowalski is None:
-            raise ValueError(
-                "Kowalski instance not provided, required for adding 2MASS xmatch to candidates"
-            )
-
+        self.validate_add_data_parameters(candidates, "2MASS")
         return add_2mass_xmatch_to_candidates(self.kowalski, candidates, radius)
 
 
@@ -628,12 +604,8 @@ class RemoteDataSource(BaseDataSource):
             if os.path.isfile(f"{local_base_dir}/{filename}"):
                 continue
 
-            start = time.time()
-
             # check if the file exists on the remote server
-            stdin, stdout, stderr = self.ssh_client.exec_command(
-                f"ls {remote_filename}"
-            )
+            _, stdout, stderr = self.ssh_client.exec_command(f"ls {remote_filename}")
             if not stdout.read():
                 continue
             if stderr.read():
@@ -652,8 +624,6 @@ class RemoteDataSource(BaseDataSource):
                     print(f"Could not download {remote_filename}: {e}")
 
             if self.verbose:
-                print(f"Downloaded {filename} in {time.time() - start:.2f} s")
-                # print the size of the file in MB
                 print(
                     f"File size: {os.path.getsize(f'{local_base_dir}/{filename}') / 1024 / 1024:.2f} MB"
                 )
@@ -694,11 +664,6 @@ class APIDataSource(BaseDataSource):
     def download_files(
         self, data: Tuple[int, int, int, str], type="lightcurve"
     ) -> List:
-        # the API is like protocol://host:port/api/type?field=field&ccd=ccd&quad=quad&band=band
-        # we need to make a request for each file
-        # the API should return the file content
-        # we should save it in the local filesystem
-
         local_base_dir, prefix = None, None
         if type == "lightcurve":
             local_base_dir, prefix, api_endpoint = (
@@ -729,17 +694,11 @@ class APIDataSource(BaseDataSource):
             if os.path.isfile(f"{local_base_dir}/{filename}"):
                 continue
 
-            # make the request to the API
-            # save the content to the local filesystem
             if self.verbose:
                 print(f"Downloading {filename} to {outdir}")
 
-            # query it with python request, streaming the data in chunks to save memory
-            url = f"{self.api_url}/{api_endpoint}"
-            print(url)
-            start = time.time()
             response = requests.get(
-                url,
+                f"{self.api_url}/{api_endpoint}",
                 params={"field": field, "ccd": ccd, "quad": quad, "filter": band},
                 stream=True,
                 auth=(self.api_user, self.api_password),
@@ -759,8 +718,6 @@ class APIDataSource(BaseDataSource):
                     f.write(chunk)
 
             if self.verbose:
-                print(f"Downloaded {filename} in {time.time() - start:.2f} s")
-                # print the size of the file in MB
                 print(
                     f"File size: {os.path.getsize(f'{local_base_dir}/{filename}') / 1024 / 1024:.2f} MB"
                 )
