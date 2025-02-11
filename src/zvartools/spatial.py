@@ -170,35 +170,6 @@ ZTFFieldData = ZTFFieldData()
 
 
 @njit
-def ang_dist(ra1, dec1, ra2, dec2):
-    """
-    Calculate angular distance between two points on sphere
-
-    Parameters
-    ----------
-    ra1 : float
-        Right ascension of the first point, in radians
-    dec1 : float
-        Declination of the first point, in radians
-    ra2 : float
-        Right ascension of the second point, in radians
-    dec2 : float
-        Declination of the second point, in radians
-
-    Returns
-    -------
-    adist - angular distance, in degrees
-    """
-
-    adist = np.sin(dec1) * np.sin(dec2) + np.cos(dec1) * np.cos(dec2) * np.cos(
-        ra2 - ra1
-    )
-    adist = np.arccos(adist) * 180.0 / np.pi
-
-    return adist
-
-
-@njit
 def fit_line(x, x0, y0, x1, y1):
     """
     Fit a linear function connecting two points (x0,y0) and (x1,y1)
@@ -285,40 +256,6 @@ def inside_polygon(xp, yp, x, y):
     return None, None
 
 
-def get_field_id(ra, dec):
-    """
-    Find the field, ccd, and quadrant number for a given object.
-    ra, dec are coordinates of the object (in degrees), fieldno,
-    ra_all, and dec_all are arrays containing ZTF field numbers,
-    and coordinates of their centers (ra_all,dec_all).
-    These calculations are approximate and may fail if the object
-    is located close to the edge of the field of view / edge of the
-    reference image.
-    """
-
-    ra = ra * np.pi / 180.0  # convert to radians
-    dec = dec * np.pi / 180.0  # convert to radians
-
-    nf = len(ZTFFieldData.fieldno)
-
-    res = []
-
-    for i in range(nf):
-        adist = great_circle_distance_rad(
-            ra, dec, ZTFFieldData.ra_all[i], ZTFFieldData.dec_all[i]
-        )
-        if adist > ADIST_MAX:
-            continue
-        x, y = ortographic_projection(
-            ra, dec, ZTFFieldData.ra_all[i], ZTFFieldData.dec_all[i]
-        )
-        ccd, quad = inside_polygon(x, y, CCD_LAYOUT_X, CCD_LAYOUT_Y)
-        if ccd is not None and quad is not None:
-            res.append([ZTFFieldData.fieldno[i], ccd, quad])
-
-    return res
-
-
 @njit
 def great_circle_distance_rad(ra1, dec1, ra2, dec2):
     """
@@ -363,3 +300,37 @@ def great_circle_distance(ra1_deg, dec1_deg, ra2_deg, dec2_deg):
         dec2_deg * DEGRA,
     )
     return great_circle_distance_rad(ra1, dec1, ra2, dec2) / DEGRA
+
+
+def get_field_id(ra, dec):
+    """
+    Find the field, ccd, and quadrant number for a given object.
+    ra, dec are coordinates of the object (in degrees), fieldno,
+    ra_all, and dec_all are arrays containing ZTF field numbers,
+    and coordinates of their centers (ra_all,dec_all).
+    These calculations are approximate and may fail if the object
+    is located close to the edge of the field of view / edge of the
+    reference image.
+    """
+
+    ra = ra * np.pi / 180.0  # convert to radians
+    dec = dec * np.pi / 180.0  # convert to radians
+
+    nf = len(ZTFFieldData.fieldno)
+
+    res = []
+
+    for i in range(nf):
+        adist = great_circle_distance_rad(
+            ra, dec, ZTFFieldData.ra_all[i], ZTFFieldData.dec_all[i]
+        )
+        if adist > ADIST_MAX:
+            continue
+        x, y = ortographic_projection(
+            ra, dec, ZTFFieldData.ra_all[i], ZTFFieldData.dec_all[i]
+        )
+        ccd, quad = inside_polygon(x, y, CCD_LAYOUT_X, CCD_LAYOUT_Y)
+        if ccd is not None and quad is not None:
+            res.append([ZTFFieldData.fieldno[i], ccd, quad])
+
+    return res

@@ -206,6 +206,8 @@ def plot_folded_lightcurve(
         raise ValueError(
             f"No valid data points found to plot_folded_lightcurve for {int(candidate.psid)}"
         )
+        # from bands, remove bands for which we have no data points
+    bands = [band for band in bands if np.any(filters == band)]
 
     phase = (time / (period * 86400)) % 2  # period is converted from days to seconds
 
@@ -246,6 +248,7 @@ def plot_folded_lightcurve(
         binned_fluxerr = binned_fluxerr[:, mask]
         x = np.arange(bins)
         x = x[mask]
+        x = x / bins
 
         for i, band in enumerate(bands):
             ax.errorbar(
@@ -263,7 +266,7 @@ def plot_folded_lightcurve(
             if not np.any(mask):
                 continue
             ax.errorbar(
-                phase[mask],
+                phase[mask] / 2,
                 flux[mask],
                 yerr=fluxerr[mask],
                 fmt="o",
@@ -296,6 +299,8 @@ def plot_periodicity(
     period: float,
     show_plot: bool = True,
     figsize: tuple = (12, 14),
+    bins: Union[int, None] = None,
+    bin_method: str = "mean",
 ):
     if period is None:
         period = 1 / candidate.freq
@@ -328,8 +333,44 @@ def plot_periodicity(
     axs[1].set_title("Periodogram")
     axs[1].set_xlabel("Frequency (Hz)")
 
+    if bins is not None:
+        # Create bins and calculate which bin each phase belongs to
+        bin_indices = np.digitize(phase, np.linspace(0, 2, bins + 1)) - 1
+
+        # we bin the points
+        binned_flux = np.zeros(bins)
+        binned_fluxerr = np.zeros(bins)
+        for j in range(bins):
+            mask = bin_indices == j
+            # if there are no points in the bin, we set the flux to -inf
+            if not np.any(mask):
+                binned_flux[j] = -np.inf
+                binned_fluxerr[j] = -np.inf
+                continue
+            if bin_method == "mean":
+                binned_flux[j] = np.mean(flux[mask])
+                binned_fluxerr[j] = np.sqrt(np.sum(fluxerr[mask] ** 2)) / np.sum(mask)
+            elif bin_method == "median":
+                binned_flux[j] = np.median(flux[mask])
+                binned_fluxerr[j] = np.median(fluxerr[mask])
+            else:
+                raise ValueError(
+                    "Invalid bin_method. Must be either 'mean' or 'median'"
+                )
+
+        # # remove bins with no data
+        mask = binned_flux != -np.inf
+        flux = binned_flux[mask]
+        fluxerr = binned_fluxerr[mask]
+        x = np.arange(bins)
+        x = x[mask]
+        # go back to phase
+        x = x / bins
+    else:
+        x = phase / 2
+
     # plot the phased lightcurve
-    axs[2].errorbar(phase, flux, yerr=fluxerr, fmt="o")
+    axs[2].errorbar(x, flux, yerr=fluxerr, fmt="o")
     axs[2].set_title(f"Phased Lightcurve (Period: {period / 60 / 60} hours)")
     axs[2].set_xlabel("Phase")
 

@@ -52,6 +52,8 @@ class GaiaMatch:
         pmra_error,
         pmdec,
         pmdec_error,
+        BP_RP=None,
+        MG=None,
     ):
         self.id = id
         self.G = G
