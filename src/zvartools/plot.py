@@ -62,9 +62,9 @@ def plot_gaia_cmd(
     if not isinstance(show_plot, bool):
         raise ValueError("Show plot must be a boolean")
 
-    periods = [
-        1 / candidate.freq
-        for candidate in candidate_list
+    valid_candidates_idx = [
+        i
+        for i, candidate in enumerate(candidate_list)
         if (
             candidate.gaia.BP_RP is not None
             and candidate.gaia.MG is not None
@@ -72,39 +72,13 @@ def plot_gaia_cmd(
             and not np.isnan(candidate.gaia.MG)
         )
     ]
-    bp_rp = [
-        candidate.gaia.BP_RP
-        for candidate in candidate_list
-        if (
-            candidate.gaia.BP_RP is not None
-            and candidate.gaia.MG is not None
-            and not np.isnan(candidate.gaia.BP_RP)
-            and not np.isnan(candidate.gaia.MG)
-        )
-    ]
-    mg = [
-        candidate.gaia.MG
-        for candidate in candidate_list
-        if (
-            candidate.gaia.BP_RP is not None
-            and candidate.gaia.MG is not None
-            and not np.isnan(candidate.gaia.BP_RP)
-            and not np.isnan(candidate.gaia.MG)
-        )
-    ]
-    best_M = [
-        candidate.best_M
-        for candidate in candidate_list
-        if (
-            candidate.gaia.BP_RP is not None
-            and candidate.gaia.MG is not None
-            and not np.isnan(candidate.gaia.BP_RP)
-            and not np.isnan(candidate.gaia.MG)
-        )
-    ]
-
-    if len(periods) == 0:
+    if len(valid_candidates_idx) == 0:
         raise ValueError("No candidates found with valid BP-RP and MG values")
+
+    periods = [1 / candidate_list[i].freq for i in valid_candidates_idx]
+    best_M = [candidate_list[i].best_M for i in valid_candidates_idx]
+    bp_rp = [candidate_list[i].gaia.BP_RP for i in valid_candidates_idx]
+    mg = [candidate_list[i].gaia.MG for i in valid_candidates_idx]
 
     # Load a Gaia HR diagram
     sample_path = os.path.join(
@@ -121,15 +95,13 @@ def plot_gaia_cmd(
     if ax is None:
         _, ax = plt.subplots(1, 1, figsize=figsize)
 
-    # Plot 2D-Histogram of 200pc sample
     ax.hist2d(
         gaia_bprp,
         gaia_gmag,
         cmap="gray",
         cmin=3,
-        cmax=30,  # vmin=1, vmax=30,
+        cmax=30,
         bins=(700, 380),
-        # it whould be a bit transparent
         alpha=0.8,
     )
     ax.hist2d(
@@ -137,7 +109,7 @@ def plot_gaia_cmd(
         gaia_gmag,
         cmap="gray_r",
         cmin=30,
-        cmax=1000,  # vmin=1, vmax=500,
+        cmax=1000,
         bins=(700, 380),
         alpha=0.8,
     )
@@ -164,21 +136,209 @@ def plot_gaia_cmd(
     cbar = plt.colorbar(sc, ax=ax)
     cbar.set_label("Period (log days)", fontsize=title_size)
 
-    # Set plot appearances
     ax.set_title("Gaia HR Diagram with Variability Candidates", fontsize=title_size)
     ax.set_ylabel("$M_G$ (mag)", fontsize=title_size)
     ax.set_xlabel("$BP-RP$ (mag)", fontsize=title_size)
-    # ax.set_xlim(-1.0, 4.5)
     ax.set_ylim(17.0, -2.0)
     ax.set_yticks([0, 5, 10, 15])
     ax.minorticks_on()
     ax.tick_params(which="both", direction="in", top=True, right=True, labelsize=14)
     ax.set_axisbelow(True)
     ax.grid(c="silver", ls=":", lw=1)
-
-    # Add legend
     ax.legend()
+    plt.tight_layout()
 
+    # Save the plot
+    if output_path:
+        output_dir = os.path.dirname(output_path)
+        os.makedirs(output_dir, exist_ok=True)
+        plt.savefig(output_path, dpi=300)
+
+    if show_plot:
+        plt.show()
+
+    plt.close()
+
+
+def plot_2mass_cmd(
+    candidate_list: List[VariabilityCandidate],
+    figsize: tuple = (9, 8),
+    output_path: str = None,
+    show_plot: bool = True,
+    ax=None,
+    title_size: int = 16,
+):
+    if not isinstance(candidate_list, list):
+        raise ValueError("Candidates must be provided as a list")
+    if not all(
+        isinstance(candidate, VariabilityCandidate) for candidate in candidate_list
+    ):
+        raise ValueError("Candidates must be of type Candidate")
+    if output_path is not None and not isinstance(output_path, (str, os.PathLike)):
+        raise ValueError("Output path must be a string or a PathLike object")
+    if not isinstance(show_plot, bool):
+        raise ValueError("Show plot must be a boolean")
+
+    valid_candidates_idx = [
+        i
+        for i, candidate in enumerate(candidate_list)
+        if (
+            candidate.twomass is not None
+            and candidate.twomass.j is not None
+            and candidate.twomass.k is not None
+            and candidate.gaia is not None
+            and candidate.gaia.parallax is not None
+            and not np.isnan(candidate.twomass.j)
+            and not np.isnan(candidate.twomass.k)
+            and not np.isnan(candidate.gaia.parallax)
+        )
+    ]
+
+    if len(valid_candidates_idx) == 0:
+        raise ValueError("No candidates found with valid 2MASS and Gaia values")
+
+    periods = [1 / candidate_list[i].freq for i in valid_candidates_idx]
+    best_M = [candidate_list[i].best_M for i in valid_candidates_idx]
+    j_k = [
+        candidate_list[i].twomass.j - candidate_list[i].twomass.k
+        for i in valid_candidates_idx
+    ]
+    j_abs = [
+        # Use gaia parallax to calculate the absolute magnitude in the J band
+        candidate_list[i].twomass.j
+        - 5 * np.log10(1e3 / candidate_list[i].gaia.parallax)
+        + 5
+        for i in valid_candidates_idx
+    ]
+
+    if len(periods) == 0:
+        raise ValueError("No candidates found with valid J-K values")
+
+    if ax is None:
+        _, ax = plt.subplots(1, 1, figsize=figsize)
+
+    for m_value in MARKER_STYLES:
+        indices = [i for i, m in enumerate(best_M) if m == m_value]
+        if not indices:
+            continue
+        marker, size = MARKER_STYLES[m_value]
+        sc = ax.scatter(
+            [j_k[i] for i in indices],
+            [j_abs[i] for i in indices],
+            c=[periods[i] for i in indices],
+            cmap="plasma",
+            s=size,
+            edgecolor="none",
+            norm=LogNorm(),
+            marker=marker,
+            label=f"best_M = {m_value}",
+        )
+
+    cbar = plt.colorbar(sc, ax=ax)
+    cbar.set_label("Period (log days)", fontsize=title_size)
+
+    ax.set_title("2MASS Color-Color Diagram", fontsize=title_size)
+    ax.set_ylabel("$M_J$ (mag)", fontsize=title_size)
+    ax.set_xlabel("$J-K$ (mag)", fontsize=title_size)
+    ax.minorticks_on()
+    ax.tick_params(which="both", direction="in", top=True, right=True, labelsize=14)
+    ax.set_axisbelow(True)
+    ax.grid(c="silver", ls=":", lw=1)
+    ax.legend()
+    plt.tight_layout()
+
+    # Save the plot
+    if output_path:
+        output_dir = os.path.dirname(output_path)
+        os.makedirs(output_dir, exist_ok=True)
+        plt.savefig(output_path, dpi=300)
+
+    if show_plot:
+        plt.show()
+
+    plt.close()
+
+
+def plot_2mass_color(
+    candidate_list: List[VariabilityCandidate],
+    figsize: tuple = (9, 8),
+    output_path: str = None,
+    show_plot: bool = True,
+    ax=None,
+    title_size: int = 16,
+):
+    if not isinstance(candidate_list, list):
+        raise ValueError("Candidates must be provided as a list")
+    if not all(
+        isinstance(candidate, VariabilityCandidate) for candidate in candidate_list
+    ):
+        raise ValueError("Candidates must be of type Candidate")
+    if output_path is not None and not isinstance(output_path, (str, os.PathLike)):
+        raise ValueError("Output path must be a string or a PathLike object")
+    if not isinstance(show_plot, bool):
+        raise ValueError("Show plot must be a boolean")
+
+    valid_candidates_idx = [
+        i
+        for i, candidate in enumerate(candidate_list)
+        if (
+            candidate.twomass is not None
+            and candidate.twomass.j is not None
+            and candidate.twomass.k is not None
+            and not np.isnan(candidate.twomass.j)
+            and not np.isnan(candidate.twomass.k)
+        )
+    ]
+
+    if len(valid_candidates_idx) == 0:
+        raise ValueError("No candidates found with valid J-K values")
+
+    periods = [1 / candidate_list[i].freq for i in valid_candidates_idx]
+    best_M = [candidate_list[i].best_M for i in valid_candidates_idx]
+    j_k = [
+        candidate_list[i].twomass.j - candidate_list[i].twomass.k
+        for i in valid_candidates_idx
+    ]
+    j = [candidate_list[i].twomass.j for i in valid_candidates_idx]
+
+    if len(periods) == 0:
+        raise ValueError("No candidates found with valid J-K values")
+
+    # Plot candidates
+    if ax is None:
+        _, ax = plt.subplots(1, 1, figsize=figsize)
+
+    # Scatter plot for candidates colored by period with logarithmic scale
+    for m_value in MARKER_STYLES:
+        indices = [i for i, m in enumerate(best_M) if m == m_value]
+        if not indices:
+            continue
+        marker, size = MARKER_STYLES[m_value]
+        sc = ax.scatter(
+            [j_k[i] for i in indices],
+            [j[i] for i in indices],
+            c=[periods[i] for i in indices],
+            cmap="plasma",
+            s=size,
+            edgecolor="none",
+            norm=LogNorm(),
+            marker=marker,
+            label=f"best_M = {m_value}",
+        )
+
+    # Add colorbar
+    cbar = plt.colorbar(sc, ax=ax)
+    cbar.set_label("Period (log days)", fontsize=title_size)
+
+    # Set plot appearances
+    ax.set_title("2MASS Color-Color Diagram", fontsize=title_size)
+    ax.set_ylabel("$J$ (mag)", fontsize=title_size)
+    ax.set_xlabel("$J-K$ (mag)", fontsize=title_size)
+    ax.minorticks_on()
+    ax.tick_params(which="both", direction="in", top=True, right=True, labelsize=14)
+    ax.set_axisbelow(True)
+    ax.grid(c="silver", ls=":", lw=1)
+    ax.legend()
     plt.tight_layout()
 
     # Save the plot
