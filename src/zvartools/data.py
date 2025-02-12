@@ -370,9 +370,7 @@ class BaseDataSource:
             )
 
         for ra, dec in positions:
-            field_ccd_quads = get_field_id(ra, dec)
-            # only keep the primary fields, so where field < 1000
-            field_ccd_quads = [f for f in field_ccd_quads if f[0] < 1000]
+            field_ccd_quads = get_field_id(ra, dec, radius)
 
             for field, ccd, quad in field_ccd_quads:
                 if (field, ccd, quad) not in fieldccdquad2radec:
@@ -842,6 +840,40 @@ class BaseDataSource:
 
                 candidates_temp = import_from_parquet(filename)
                 candidates.extend(candidates_temp)
+
+        return candidates
+
+    def load_all_objects_from_matchfile(self, field, ccd, quad, band):
+        """
+        Load all objects from a given path to an h5 file
+        """
+        filename = f"{self.local_lightcurve_path}/{field:04d}/data_{field:04d}_{ccd:02d}_{quad:01d}_z{band}.h5"
+        if not os.path.isfile(filename):
+            raise ValueError(f"File {filename} not found")
+
+        candidates = []
+        with h5py.File(filename, "r") as f:
+            data = f["data"]
+            sources: h5py.Dataset = data["sources"]
+            for i in range(len(sources)):
+                psid = sources["gaia_id"][i]
+                ra = sources["ra"][i]
+                dec = sources["decl"][i]
+                candidates.append(
+                    VariabilityCandidate(
+                        psid=psid,
+                        ra=ra,
+                        dec=dec,
+                        valid=True,
+                        freq=None,
+                        fap=None,
+                        best_M=None,
+                        field=field,
+                        ccd=ccd,
+                        quad=quad,
+                        band=band,
+                    )
+                )
 
         return candidates
 
