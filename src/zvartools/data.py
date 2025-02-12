@@ -4,6 +4,7 @@ import numpy as np
 import h5py
 from astropy.coordinates import SkyCoord
 
+import fpw
 import paramiko
 import requests
 from scp import SCPClient, SCPException
@@ -11,7 +12,7 @@ from penquins import Kowalski
 
 from zvartools.spatial import get_field_id, great_circle_distance
 from zvartools.enums import FILTER2IDX
-from zvartools.lightcurves import cleanup_lightcurve, adu_to_jansky
+from zvartools.lightcurves import cleanup_lightcurve, adu_to_jansky, freq_grid
 from zvartools.candidate import (
     VariabilityCandidate,
     add_gaia_xmatch_to_candidates,
@@ -20,7 +21,7 @@ from zvartools.candidate import (
     add_2mass_xmatch_to_candidates,
     import_from_parquet,
 )
-from zvartools.enums import ALLOWED_BANDS
+from zvartools.enums import ALLOWED_BANDS, FILTER2IDX
 
 
 class BaseDataSource:
@@ -90,6 +91,7 @@ class BaseDataSource:
         self.local_period_path = local_period_path
         self.kwargs = kwargs
         self.verbose = kwargs.get("verbose", False)
+        self.secondary = kwargs.get("secondary", True)
 
         self.implements = {
             "check_file_availability",
@@ -126,6 +128,8 @@ class BaseDataSource:
         available, missing = [], []
 
         for field, ccd, quad, band in data:
+            if not self.secondary and field > 1000:
+                continue
             filename = (
                 f"{field:04d}/{prefix}_{field:04d}_{ccd:02d}_{quad:01d}_z{band}.h5"
             )
@@ -492,6 +496,16 @@ class BaseDataSource:
 
         return radec2sources, lightcurve_per_psid
 
+    @staticmethod
+    def psid2radec(psid):
+        psid = str(int(psid))
+        ZH = 0.0083333
+        ZID = str(f"{int(str(psid[0:5]).lstrip('0'))}.{psid[14:18]}")
+        dec = (float(ZID) * ZH) - 90.0
+        ra_str = str(f"{int(str(psid[5:8]).lstrip('0'))}.{psid[8:14]}")
+        ra = float(ra_str)
+        return ra, dec
+
     def psid_search(self, pstargets: Union[list, tuple]):
         """
         Search for the given Pan-STARRs targets
@@ -499,47 +513,36 @@ class BaseDataSource:
         Parameters
         ----------
         pstargets: list
-            A list of Pan-STARRs targets, each target can be a tuple, list, dict or object with psid, field, ccd and quad attributes
+            A list of Pan-STARRs ids
 
         Returns
         -------
         dict, dict
             A dictionary with the sources found for each target, a dictionary with the lightcurves for each source
         """
-        if isinstance(pstargets, (list, tuple)) and all(
-            isinstance(t, (list, tuple)) and len(t) == 4 for t in pstargets
-        ):
-            targets = pstargets
-        elif isinstance(pstargets, (list, tuple)) and all(
-            isinstance(t, dict)
-            and "psid" in t
-            and "field" in t
-            and "ccd" in t
-            and "quad" in t
-            for t in pstargets
-        ):
-            targets = [(t["psid"], t["field"], t["ccd"], t["quad"]) for t in pstargets]
-        elif isinstance(pstargets, (list, tuple)) and all(
-            isinstance(t, object)
-            and hasattr(t, "psid")
-            and hasattr(t, "field")
-            and hasattr(t, "ccd")
-            and hasattr(t, "quad")
-            for t in pstargets
-        ):
-            targets = [(t.psid, t.field, t.ccd, t.quad) for t in pstargets]
+        if not isinstance(pstargets, (list, tuple)):
+            raise ValueError(
+                "Pan-STARRs targets should be a list of tuples, lists or dicts"
+            )
+        if not all(isinstance(t, (int, str, float)) for t in pstargets):
+            raise ValueError(
+                "Pan-STARRs targets should be a list of integers or strings"
+            )
 
         lightcurve_per_psid = {}
         metadata_per_psidband = {}
         # create a mapper from field, ccd, quad to psid
         fieldccdquad2psid = {}
         data_to_recover = []
-        for psid, field, ccd, quad in targets:
-            if (field, ccd, quad) not in fieldccdquad2psid:
-                fieldccdquad2psid[(field, ccd, quad)] = []
-                for band in ["g", "r"]:
-                    data_to_recover.append((field, ccd, quad, band))
-            fieldccdquad2psid[(field, ccd, quad)].append(psid)
+        for psid in pstargets:
+            ra, dec = self.psid2radec(psid)
+            field_ccd_quads = get_field_id(ra, dec, 2.0)
+            for field, ccd, quad in field_ccd_quads:
+                if (field, ccd, quad) not in fieldccdquad2psid:
+                    fieldccdquad2psid[(field, ccd, quad)] = set()
+                    for band in ["g", "r"]:
+                        data_to_recover.append((field, ccd, quad, band))
+                fieldccdquad2psid[(field, ccd, quad)].add(psid)
 
         available_lightcurves = self.get_files(data_to_recover, type="lightcurve")
         available_periods = self.get_files(data_to_recover, type="period")
@@ -1016,10 +1019,30 @@ class APIDataSource(BaseDataSource):
         **kwargs,
     ):
         super().__init__(local_lightcurve_path, local_period_path, **kwargs)
-        self.api_url = api_url
+        self.api_url = str(api_url).rstrip("/")
         self.api_user = api_user
         self.api_password = api_password
         self.implements.add("download_files")
+
+    def test_api_connection(self):
+        """
+        Test the connection to the API
+
+        Returns
+        -------
+        bool
+            True if the connection is successful, False otherwise
+        """
+        try:
+            response = requests.get(
+                f"{self.api_url}/api/hello", auth=(self.api_user, self.api_password)
+            )
+            response.raise_for_status()
+            return True
+        except Exception as e:
+            if self.verbose:
+                print(f"Could not connect to the API: {e}")
+            return False
 
     def download_files(
         self, data: Tuple[int, int, int, str], type: str = "lightcurve"
@@ -1100,3 +1123,81 @@ class APIDataSource(BaseDataSource):
             downloaded.append((field, ccd, quad, band))
 
         return downloaded
+
+    def fpw_periodogram(
+        self,
+        lightcurve,
+        band="r",
+        nb_periods=1,
+        period_unit="hours",
+        binsize=5,
+        freq_min=None,
+        freq_max=None,
+    ):
+        """
+        Compute the periodogram using the FPW algorithm
+
+        Parameters
+        ----------
+        lightcurve: np.ndarray
+            The lightcurve data, of shape (time, flux, flux_err, band)
+        band: str
+            The band to compute the periodogram for
+        nb_periods: int
+            The number of periods to return
+        period_unit: str
+            The unit to return the period in: minutes, hours, days
+        binsize: int
+            The binsize to use
+        freq_min: float
+            The minimum frequency to consider
+        freq_max: float
+            The maximum frequency to consider
+
+        Returns
+        -------
+        Tuple
+            A tuple with the N best periods, their significances and the full periodogram
+        """
+        if band not in ALLOWED_BANDS:
+            raise ValueError(
+                f"Band {band} is not supported, must be one of {ALLOWED_BANDS}"
+            )
+        if nb_periods < 1:
+            raise ValueError("Number of periods must be greater than 0")
+        if period_unit not in ["minutes", "hours", "days"]:
+            raise ValueError("Period unit must be one of minutes, hours, days")
+
+        if period_unit == "minutes":
+            multiplier = 60
+        elif period_unit == "hours":
+            multiplier = 3600
+        elif period_unit == "days":
+            multiplier = 86400
+
+        lc = lightcurve.copy()
+        lc = lc[:, lc[3] == FILTER2IDX[band]]
+
+        # we drop the non detections
+        lc = lc[~np.isnan(lc[:, 1])]
+        # we make sure all arrays are C-contiguous, required by FPW
+        time, flux, flux_err = (np.ascontiguousarray(x) for x in lc[:3])
+
+        # we center the flux on 0 by subtracting the median
+        flux -= np.nanmedian(flux)
+
+        f_grid = freq_grid(time, fmin=freq_min, fmax=freq_max)
+
+        fpw_pgram = fpw.run_fpw(time, flux, flux_err, f_grid, binsize)
+        fpw_pgram[np.isnan(fpw_pgram)] = 0
+
+        nb_periods = min(len(fpw_pgram[fpw_pgram > 0]), nb_periods)
+
+        # return the periods and their significance, ordered by significance desc, up to nb_periods
+        periods = []
+        significances = []
+        for i in np.argsort(fpw_pgram)[::-1][:nb_periods]:
+            periods.append(1 / f_grid[i] / multiplier)
+            significances.append(fpw_pgram[i])
+
+        return periods, significances, fpw_pgram
