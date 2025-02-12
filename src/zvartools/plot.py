@@ -129,6 +129,8 @@ def plot_gaia_cmd(
         cmin=3,
         cmax=30,  # vmin=1, vmax=30,
         bins=(700, 380),
+        # it whould be a bit transparent
+        alpha=0.8,
     )
     ax.hist2d(
         gaia_bprp,
@@ -137,6 +139,7 @@ def plot_gaia_cmd(
         cmin=30,
         cmax=1000,  # vmin=1, vmax=500,
         bins=(700, 380),
+        alpha=0.8,
     )
 
     # Scatter plot for candidates colored by period with logarithmic scale
@@ -361,6 +364,7 @@ def plot_periodicity(
     photometry: List[np.ndarray],
     pgram: np.ndarray,
     period: float,
+    period_unit: str = "hours",
     show_plot: bool = True,
     figsize: tuple = (12, 14),
     bins: Union[int, None] = None,
@@ -378,7 +382,9 @@ def plot_periodicity(
     pgram : np.ndarray
         Periodogram data
     period : float
-        Period of the candidate
+        Period of the candidate, in hours
+    period_unit : str, optional
+        Unit of the period if provided, by default "hours"
     show_plot : bool, optional
         Whether to show the plot, by default True
     figsize : tuple, optional
@@ -396,6 +402,15 @@ def plot_periodicity(
     """
     if period is None:
         period = 1 / candidate.freq
+    elif period_unit == "minutes":
+        # convert from minutes to seconds
+        period *= 60
+    elif period_unit == "hours":
+        # convert from hours to seconds
+        period *= 60 * 60
+    elif period_unit == "days":
+        # convert from days to seconds
+        period *= 86400
     # for now this method supports single band data, so to prevent any errors we throw an exception if there are multiple filters
     if len(set(photometry[3])) > 1:
         raise ValueError("This method only supports single band data (for now)")
@@ -409,7 +424,7 @@ def plot_periodicity(
 
     fgrid = freq_grid(time)
 
-    phase = (time / (period * 86400)) % 2  # period is converted from days to seconds
+    phase = (time / period) % 2
 
     # we plot all 3 plots above in a row of 3 subplots
     fig, axs = plt.subplots(3, 1, figsize=figsize)
