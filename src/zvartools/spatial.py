@@ -1,4 +1,5 @@
 import os
+from typing import Union
 
 import numpy as np
 from numba import njit
@@ -141,6 +142,9 @@ CCD_LAYOUT_Y = [
 # in radians
 ADIST_MAX = 5.66 * np.pi / 180.0
 
+# buffer for the CCD layout, to avoid edge effects
+CCD_BUFFER = 0.03
+
 DEGRA = np.pi / 180.0
 
 
@@ -265,16 +269,27 @@ def inside_polygon(xp: float, yp: float, x: list, y: list) -> tuple:
         ccd, quadrant number
     """
 
+    ccd_quads = []
+
     for i in range(16):
         idx = 4 * i
 
-        y_test_1 = fit_line(xp, x[idx], y[idx], x[idx + 3], y[idx + 3])
-        y_test_2 = fit_line(xp, x[idx + 1], y[idx + 1], x[idx + 2], y[idx + 2])
+        y_test_1 = fit_line(
+            xp, x[idx], y[idx] - CCD_BUFFER, x[idx + 3], y[idx + 3] - CCD_BUFFER
+        )
+        y_test_2 = fit_line(
+            xp, x[idx + 1], y[idx + 1] + CCD_BUFFER, x[idx + 2], y[idx + 2] + CCD_BUFFER
+        )
+
+        x_test_1 = fit_line(
+            yp, y[idx], x[idx] - CCD_BUFFER, y[idx + 1], x[idx + 1] - CCD_BUFFER
+        )
+        x_test_2 = fit_line(
+            yp, y[idx + 3], x[idx + 3] + CCD_BUFFER, y[idx + 2], x[idx + 2] + CCD_BUFFER
+        )
+
         if yp < y_test_1 or yp > y_test_2:
             continue
-
-        x_test_1 = fit_line(yp, y[idx], x[idx], y[idx + 1], x[idx + 1])
-        x_test_2 = fit_line(yp, y[idx + 3], x[idx + 3], y[idx + 2], x[idx + 2])
         if xp < x_test_1 or xp > x_test_2:
             continue
 
@@ -295,20 +310,20 @@ def inside_polygon(xp: float, yp: float, x: list, y: list) -> tuple:
             0.5 * (x[idx + 1] + x[idx + 2]),
         )
 
-        if yp < y_test:
-            if xp < x_test:
-                quad = 4
-            else:
-                quad = 3
-        else:
-            if xp < x_test:
-                quad = 1
-            else:
-                quad = 2
+        # also use a buffer here, and a point could be in multiple quadrants
+        if yp < y_test or abs(yp - y_test) < CCD_BUFFER:
+            if xp < x_test or abs(xp - x_test) < CCD_BUFFER:
+                ccd_quads.append((ccd, 4))
+            if xp > x_test or abs(xp - x_test) < CCD_BUFFER:
+                ccd_quads.append((ccd, 3))
 
-        return ccd, quad
+        if yp > y_test or abs(yp - y_test) < CCD_BUFFER:
+            if xp < x_test or abs(xp - x_test) < CCD_BUFFER:
+                ccd_quads.append((ccd, 1))
+            if xp > x_test or abs(xp - x_test) < CCD_BUFFER:
+                ccd_quads.append((ccd, 2))
 
-    return None, None
+    return ccd_quads
 
 
 @njit
@@ -381,7 +396,7 @@ def great_circle_distance(
     return great_circle_distance_rad(ra1, dec1, ra2, dec2) / DEGRA
 
 
-def get_field_id(ra: float, dec: float):
+def get_field_id(ra: float, dec: float, radius: Union[float, int, None] = None) -> list:
     """
     Find the field, ccd, and quadrant number for a given object.
     ra, dec are coordinates of the object (in degrees), fieldno,
@@ -397,6 +412,8 @@ def get_field_id(ra: float, dec: float):
         Right ascension of the object in degrees
     dec : float
         Declination of the object in degrees
+    radius : Union[float, int, None], optional
+        Radius of the search in arcsec, by default None.
 
     Returns
     -------
@@ -407,6 +424,10 @@ def get_field_id(ra: float, dec: float):
     ra = ra * DEGRA
     dec = dec * DEGRA
 
+    field_adist = ADIST_MAX
+    if radius is not None:
+        field_adist += (radius / 3600) * DEGRA
+
     nf = len(ZTFFieldData.fieldno)
 
     res = []
@@ -415,13 +436,15 @@ def get_field_id(ra: float, dec: float):
         adist = great_circle_distance_rad(
             ra, dec, ZTFFieldData.ra_all[i], ZTFFieldData.dec_all[i]
         )
-        if adist > ADIST_MAX:
+        if adist > field_adist:
             continue
         x, y = ortographic_projection(
             ra, dec, ZTFFieldData.ra_all[i], ZTFFieldData.dec_all[i]
         )
-        ccd, quad = inside_polygon(x, y, CCD_LAYOUT_X, CCD_LAYOUT_Y)
-        if ccd is not None and quad is not None:
-            res.append([ZTFFieldData.fieldno[i], ccd, quad])
+        # TODO, use the radius (if provided) to increase the CCD buffer size
+        ccd_quads = inside_polygon(x, y, CCD_LAYOUT_X, CCD_LAYOUT_Y)
+        if len(ccd_quads) > 0:
+            for ccd, quad in ccd_quads:
+                res.append([ZTFFieldData.fieldno[i], ccd, quad])
 
     return res
