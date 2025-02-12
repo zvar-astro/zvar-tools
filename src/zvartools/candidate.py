@@ -12,10 +12,7 @@ from zvartools.external import (
     query_allwise,
 )
 from zvartools.stats import get_cdf, get_extrema
-
-
-BIN_IDX_TO_FREQ_COL = {0: "frequency_20", 1: "frequency_10", 2: "frequency_5"}
-BIN_IDX_TO_FAP_COL = {0: "FAP_20", 1: "FAP_10", 2: "FAP_5"}
+from zvartools.enums import BIN_IDX_TO_FREQ_COL, BIN_IDX_TO_FAP_COL
 
 
 class PS1Match:
@@ -166,6 +163,19 @@ class VariabilityCandidate:
         self,
         ps1: Union[PS1Match, dict, None],
     ):
+        """
+        Set the PS1 data for the candidate
+
+        Parameters
+        ----------
+        ps1 : Union[PS1Match, dict, None]
+            PS1 data
+
+        Raises
+        ------
+        ValueError
+            If the PS1 data is not of the correct type
+        """
         if isinstance(ps1, PS1Match):
             self.ps1 = ps1
         elif isinstance(ps1, dict):
@@ -179,6 +189,19 @@ class VariabilityCandidate:
         self,
         gaia: Union[GaiaMatch, dict, None],
     ):
+        """
+        Set the Gaia data for the candidate
+
+        Parameters
+        ----------
+        gaia : Union[GaiaMatch, dict, None]
+            Gaia data
+
+        Raises
+        ------
+        ValueError
+            If the Gaia data is not of the correct type
+        """
         if isinstance(gaia, GaiaMatch):
             self.gaia = gaia
         elif isinstance(gaia, dict):
@@ -192,6 +215,19 @@ class VariabilityCandidate:
         self,
         twomass: Union[TwoMASSMatch, dict, None],
     ):
+        """
+        Set the 2MASS data for the candidate
+
+        Parameters
+        ----------
+        twomass : Union[TwoMASSMatch, dict, None]
+            2MASS data
+
+        Raises
+        ------
+        ValueError
+            If the 2MASS data is not of the correct type
+        """
         if isinstance(twomass, TwoMASSMatch):
             self.twomass = twomass
         elif isinstance(twomass, dict):
@@ -205,6 +241,19 @@ class VariabilityCandidate:
         self,
         allwise: Union[AllWISEMatch, dict, None],
     ):
+        """
+        Set the AllWISE data for the candidate
+
+        Parameters
+        ----------
+        allwise : Union[AllWISEMatch, dict, None]
+            AllWISE data
+
+        Raises
+        ------
+        ValueError
+            If the AllWISE data is not of the correct type
+        """
         if isinstance(allwise, AllWISEMatch):
             self.allwise = allwise
         elif isinstance(allwise, dict):
@@ -240,6 +289,35 @@ def get_candidates(
     ccds: np.ndarray,
     quads: np.ndarray,
 ) -> List[VariabilityCandidate]:
+    """
+    Get the variability candidates from the data
+
+    Parameters
+    ----------
+    psids : np.ndarray
+        PS1 IDs
+    ra : np.ndarray
+        Right ascensions
+    dec : np.ndarray
+        Declinations
+    ratio_valid : np.ndarray
+        Ratio of valid data points
+    freqs : np.ndarray
+        Frequencies
+    sigs : np.ndarray
+        Significances
+    field : int
+        Field number
+    ccds : np.ndarray
+        CCD numbers
+    quads : np.ndarray
+        Quadrant numbers
+
+    Returns
+    -------
+    List[VariabilityCandidate]
+        List of variability candidates
+    """
     # Precompute the CDFs for each bin
     cdfs = [get_cdf(sigs[:, j, 0]) for j in range(3)]
 
@@ -296,6 +374,21 @@ def get_candidates(
 def add_ps1_xmatch_to_candidates(
     k: Kowalski, candidate_list: List[VariabilityCandidate]
 ) -> List[VariabilityCandidate]:
+    """
+    Add PS1 crossmatches to the candidates
+
+    Parameters
+    ----------
+    k : Kowalski
+        Kowalski instance
+    candidate_list : List[VariabilityCandidate]
+        List of variability candidates
+
+    Returns
+    -------
+    List[VariabilityCandidate]
+        List of variability candidates with PS1 crossmatches
+    """
     # query_ps1 only needs the psids
     psids = [candidate.psid for candidate in candidate_list]
     xmatches = query_ps1(k, psids)
@@ -327,8 +420,25 @@ def add_ps1_xmatch_to_candidates(
 
 
 def add_gaia_xmatch_to_candidates(
-    k: Kowalski, candidate_list: List[VariabilityCandidate], radius: float
+    k: Kowalski, candidate_list: List[VariabilityCandidate], radius: float = 2.0
 ) -> List[VariabilityCandidate]:
+    """
+    Add Gaia crossmatches to the candidates
+
+    Parameters
+    ----------
+    k : Kowalski
+        Kowalski instance
+    candidate_list : List[VariabilityCandidate]
+        List of variability candidates
+    radius : float
+        Radius in arcseconds to search for xmatches in external catalogs
+
+    Returns
+    -------
+    List[VariabilityCandidate]
+        List of variability candidates with Gaia crossmatches
+    """
     if not isinstance(candidate_list, list):
         raise ValueError("Candidates must be provided as a list")
     if not all(
@@ -369,8 +479,25 @@ def add_gaia_xmatch_to_candidates(
 
 
 def add_2mass_xmatch_to_candidates(
-    k: Kowalski, candidate_list: List[VariabilityCandidate], radius: float
+    k: Kowalski, candidate_list: List[VariabilityCandidate], radius: float = 2.0
 ) -> List[VariabilityCandidate]:
+    """
+    Add 2MASS crossmatches to the candidates
+
+    Parameters
+    ----------
+    k : Kowalski
+        Kowalski instance
+    candidate_list : List[VariabilityCandidate]
+        List of variability candidates
+    radius : float
+        Radius in arcseconds to search for xmatches in external catalogs
+
+    Returns
+    -------
+    List[VariabilityCandidate]
+        List of variability candidates with 2MASS crossmatches
+    """
     if not isinstance(candidate_list, list):
         raise ValueError("Candidates must be provided as a list")
     if not all(
@@ -408,8 +535,25 @@ def add_2mass_xmatch_to_candidates(
 
 
 def add_allwise_xmatch_to_candidates(
-    k: Kowalski, candidate_list: List[VariabilityCandidate], radius: float
+    k: Kowalski, candidate_list: List[VariabilityCandidate], radius: float = 2.0
 ) -> List[VariabilityCandidate]:
+    """
+    Add AllWISE crossmatches to the candidates
+
+    Parameters
+    ----------
+    k : Kowalski
+        Kowalski instance
+    candidate_list : List[VariabilityCandidate]
+        List of variability candidates
+    radius : float
+        Radius in arcseconds to search for xmatches in external catalogs
+
+    Returns
+    -------
+    List[VariabilityCandidate]
+        List of variability candidates with AllWISE crossmatches
+    """
     if not isinstance(candidate_list, list):
         raise ValueError("Candidates must be provided as a list")
     if not all(
@@ -451,6 +595,25 @@ def add_allwise_xmatch_to_candidates(
 def export_to_parquet(
     candidate_list: List[VariabilityCandidate], field: int, band: int, path: str
 ):
+    """
+    Export the candidates to a parquet file
+
+    Parameters
+    ----------
+    candidate_list : List[VariabilityCandidate]
+        List of variability candidates
+    field : int
+        Field number
+    band : int
+        Band number
+    path : str
+        Output directory
+
+    Raises
+    ------
+    ValueError
+        If any of the arguments is invalid
+    """
     if not isinstance(candidate_list, list):
         raise ValueError("Candidates must be provided as a list")
     if not all(
@@ -531,6 +694,21 @@ def export_to_parquet(
 
 
 def import_from_parquet(path: str, best_m_only=True) -> List[VariabilityCandidate]:
+    """
+    Import the candidates from a parquet file
+
+    Parameters
+    ----------
+    path : str
+        Path to the parquet file
+    best_m_only : bool
+        Whether to only use the best M value
+
+    Returns
+    -------
+    List[VariabilityCandidate]
+        List of variability candidates
+    """
     if not os.path.exists(path):
         raise ValueError(f"File {path} does not exist")
     df = pd.read_parquet(path)

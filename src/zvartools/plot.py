@@ -8,7 +8,7 @@ from matplotlib.colors import LogNorm
 
 from zvartools.candidate import VariabilityCandidate
 from zvartools.enums import ALLOWED_BANDS
-from zvartools.lightcurves import freq_grid, remove_nans
+from zvartools.lightcurves import freq_grid, remove_nondetections
 
 BAND_TO_COLOR = {1: "green", 2: "red", 3: "orange"}
 BAND_IDX_TO_NAME = {1: "g", 2: "r", 3: "i"}
@@ -24,6 +24,33 @@ def plot_gaia_cmd(
     ax=None,
     title_size: int = 16,
 ):
+    """
+    Plot a Gaia HR diagram with variability candidates
+
+    Parameters
+    ----------
+    candidate_list : List[VariabilityCandidate]
+        List of variability candidates
+    figsize : tuple, optional
+        Figure size, by default (9, 8)
+    output_path : str, optional
+        Path to save the plot, by default None
+    show_plot : bool, optional
+        Whether to show the plot, by default True
+    ax : matplotlib.axes.Axes, optional
+        Axes to plot on, by default None
+    title_size : int, optional
+        Font size for the title, by default 16
+
+    Raises
+    ------
+    ValueError
+        If candidates are not provided as a list
+        If candidates are not of type Candidate
+        If output path is not a string or PathLike object
+        If show plot is not a boolean
+        If no candidates found with valid BP-RP and MG values
+    """
     if not isinstance(candidate_list, list):
         raise ValueError("Candidates must be provided as a list")
     if not all(
@@ -177,6 +204,43 @@ def plot_folded_lightcurve(
     bins: Union[int, None] = None,
     bin_method: str = "mean",
 ):
+    """
+    Plot the folded lightcurve of a candidate
+
+    Parameters
+    ----------
+    candidate : VariabilityCandidate
+        Variability candidate
+    photometry : List[np.ndarray]
+        Photometry data
+    bands : List[str], optional
+        Bands to plot, by default ["g", "r"]
+    period : float, optional
+        Period of the candidate, by default None
+    figsize : tuple, optional
+        Figure size, by default (9, 8)
+    output_path : str, optional
+        Path to save the plot, by default None
+    show_plot : bool, optional
+        Whether to show the plot, by default True
+    ax : matplotlib.axes.Axes, optional
+        Axes to plot on, by default None
+    marker_size : int, optional
+        Marker size for the plot, by default 4
+    title_size : int, optional
+        Font size for the title, by default 16
+    bins : Union[int, None], optional
+        Number of bins to use for binning the data, by default None
+    bin_method : str, optional
+        Method to use for binning the data, by default "mean"
+
+    Raises
+    ------
+    ValueError
+        If an invalid band is specified
+        If no data points found in the specified bands
+        If no valid data points found to plot_folded_lightcurve
+    """
     if period is None:
         period = 1 / candidate.freq
     bands = list({band.lower() for band in bands})
@@ -185,7 +249,7 @@ def plot_folded_lightcurve(
     bands = [BAND_NAME_TO_IDX[band] for band in bands]
 
     # remove data points with flux = NaN
-    time, flux, fluxerr, filters = remove_nans(
+    time, flux, fluxerr, filters = remove_nondetections(
         photometry[0], photometry[1], photometry[2], photometry[3]
     )
 
@@ -274,7 +338,7 @@ def plot_folded_lightcurve(
                 color=BAND_TO_COLOR[band],
                 ms=marker_size,
             )
-    # ax.errorbar(phase, flux, yerr=fluxerr, fmt="o", color="black", ms=3)
+
     ax.set_xlabel("Phase")
     ax.set_ylabel("Flux")
     ax.set_title(
@@ -302,6 +366,34 @@ def plot_periodicity(
     bins: Union[int, None] = None,
     bin_method: str = "mean",
 ):
+    """
+    Plot the lightcurve, periodogram, and phased lightcurve of a candidate
+
+    Parameters
+    ----------
+    candidate : VariabilityCandidate
+        Variability candidate
+    photometry : List[np.ndarray]
+        Photometry data
+    pgram : np.ndarray
+        Periodogram data
+    period : float
+        Period of the candidate
+    show_plot : bool, optional
+        Whether to show the plot, by default True
+    figsize : tuple, optional
+        Figure size, by default (12, 14)
+    bins : Union[int, None], optional
+        Number of bins to use for binning the data, by default None
+    bin_method : str, optional
+        Method to use for binning the data, by default "mean"
+
+    Raises
+    ------
+    ValueError
+        If there are multiple filters
+        If no valid data points found to plot_periodicity
+    """
     if period is None:
         period = 1 / candidate.freq
     # for now this method supports single band data, so to prevent any errors we throw an exception if there are multiple filters
@@ -309,7 +401,7 @@ def plot_periodicity(
         raise ValueError("This method only supports single band data (for now)")
 
     # remove data points with flux = NaN
-    time, flux, fluxerr, _ = remove_nans(
+    time, flux, fluxerr, _ = remove_nondetections(
         photometry[0], photometry[1], photometry[2], photometry[3]
     )
     if len(time) == 0:
@@ -400,6 +492,39 @@ def plot_folded_photometry_stat_per_bin(
     line_width: int = 1,
     title_size: int = 16,
 ):
+    """
+    Plot the median or mean flux per bin for the folded lightcurve
+
+    Parameters
+    ----------
+    candidate : VariabilityCandidate
+        Variability candidate
+    photometry : List[np.ndarray]
+        Photometry data
+    period : float, optional
+        Period of the candidate, by default None
+    num_bins : int, optional
+        Number of bins to use for binning the data, by default 20
+    method : str, optional
+        Method to use for calculating the flux per bin, by default "median"
+    figsize : tuple, optional
+        Figure size, by default (9, 8)
+    output_path : str, optional
+        Path to save the plot, by default None
+    show_plot : bool, optional
+        Whether to show the plot, by default True
+    ax : matplotlib.axes.Axes, optional
+        Axes to plot on, by default None
+    line_width : int, optional
+        Line width for the plot, by default 1
+    title_size : int, optional
+        Font size for the title, by default 16
+
+    Raises
+    ------
+    ValueError
+        If an invalid method is specified
+    """
     method = method.lower()
     if method not in ["median", "mean"]:
         raise ValueError("Invalid method. Must be either 'median' or 'mean'")
@@ -407,7 +532,7 @@ def plot_folded_photometry_stat_per_bin(
         period = 1 / candidate.freq
 
     # remove data points with flux = NaN
-    time, flux, _, _ = remove_nans(
+    time, flux, _, _ = remove_nondetections(
         photometry[0], photometry[1], photometry[2], photometry[3]
     )
 
@@ -471,6 +596,37 @@ def plot_folded_photometry_median_per_bin(
     line_width: int = 1,
     title_size: int = 16,
 ):
+    """
+    Plot the median flux per bin for the folded lightcurve
+
+    Parameters
+    ----------
+    candidate : VariabilityCandidate
+        Variability candidate
+    photometry : List[np.ndarray]
+        Photometry data
+    period : float, optional
+        Period of the candidate, by default None
+    num_bins : int, optional
+        Number of bins to use for binning the data, by default 20
+    figsize : tuple, optional
+        Figure size, by default (9, 8)
+    output_path : str, optional
+        Path to save the plot, by default None
+    show_plot : bool, optional
+        Whether to show the plot, by default True
+    ax : matplotlib.axes.Axes, optional
+        Axes to plot on, by default None
+    line_width : int, optional
+        Line width for the plot, by default 1
+    title_size : int, optional
+        Font size for the title, by default 16
+
+    Raises
+    ------
+    ValueError
+        If an invalid method is specified
+    """
     plot_folded_photometry_stat_per_bin(
         candidate,
         photometry,
@@ -499,6 +655,37 @@ def plot_folded_photometry_mean_per_bin(
     line_width: int = 1,
     title_size: int = 16,
 ):
+    """
+    Plot the mean flux per bin for the folded lightcurve
+
+    Parameters
+    ----------
+    candidate : VariabilityCandidate
+        Variability candidate
+    photometry : List[np.ndarray]
+        Photometry data
+    period : float, optional
+        Period of the candidate, by default None
+    num_bins : int, optional
+        Number of bins to use for binning the data, by default 20
+    figsize : tuple, optional
+        Figure size, by default (9, 8)
+    output_path : str, optional
+        Path to save the plot, by default None
+    show_plot : bool, optional
+        Whether to show the plot, by default True
+    ax : matplotlib.axes.Axes, optional
+        Axes to plot on, by default None
+    line_width : int, optional
+        Line width for the plot, by default 1
+    title_size : int, optional
+        Font size for the title, by default 16
+
+    Raises
+    ------
+    ValueError
+        If an invalid method is specified
+    """
     plot_folded_photometry_stat_per_bin(
         candidate,
         photometry,

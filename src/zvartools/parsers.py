@@ -5,6 +5,14 @@ from zvartools.enums import ALLOWED_BANDS
 
 
 def candidates_parser() -> argparse.ArgumentParser:
+    """
+    Create the parser for the candidate catalog creation script
+
+    Returns
+    -------
+    argparse.ArgumentParser
+        Parser for the candidate catalog creation script
+    """
     parser = argparse.ArgumentParser(
         description="Run candidate detection on ZVAR results"
     )
@@ -46,6 +54,24 @@ def candidates_parser() -> argparse.ArgumentParser:
 
 
 def validate_candidates_args(args) -> argparse.Namespace:
+    """
+    Validate the arguments for the candidate catalog creation script
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        Arguments parsed by the parser
+
+    Returns
+    -------
+    argparse.Namespace
+        Validated arguments
+
+    Raises
+    ------
+    ValueError
+        If any of the arguments is invalid
+    """
     # FIELD_MIN
     try:
         args.field_min = int(args.field_min)

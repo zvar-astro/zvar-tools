@@ -8,7 +8,24 @@ import h5py
 import numpy as np
 
 
-def load_file(file):
+def load_file(
+    file: str,
+) -> Tuple[
+    str, Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]
+]:
+    """
+    Load the periodicity (FPW) data from a file
+
+    Parameters
+    ----------
+    file : str
+        Path to the file
+
+    Returns
+    -------
+    Tuple[str, Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]]
+        File name and the data from the file
+    """
     try:
         psids = np.array([], dtype=np.uint64)
         ratio_valid = np.array([])
@@ -43,7 +60,20 @@ def load_file(file):
         return file, None
 
 
-def get_ccd_quad_from_filename(file_name):
+def get_ccd_quad_from_filename(file_name: str) -> Tuple[int, int]:
+    """
+    Get the CCD and quadrant numbers from the file name
+
+    Parameters
+    ----------
+    file_name : str
+        Name of the file
+
+    Returns
+    -------
+    Tuple[int, int]
+        CCD and quadrant numbers
+    """
     ccd = int(file_name.split("_")[-3])
     quad = int(file_name.split("_")[-2])
     return ccd, quad
@@ -61,6 +91,32 @@ def load_field_periodicity_data_parallel(
     np.ndarray,
     np.ndarray,
 ]:
+    """
+    Load the periodicity data for a given field and band, loading the data in parallel
+
+    Parameters
+    ----------
+    field : int
+        Field number
+    band : int
+        Band number
+    path : str
+        Path to the data files
+
+    Returns
+    -------
+    Tuple[
+        np.ndarray,
+        np.ndarray,
+        np.ndarray,
+        np.ndarray,
+        np.ndarray,
+        np.ndarray,
+        np.ndarray,
+        np.ndarray,
+    ]
+        PSIDs, RA, Dec, ratio_valid, best_freqs, significances, CCDs, quadrants
+    """
     if not isinstance(field, (int, np.integer, str)):
         raise ValueError("Field must be an integer or string")
     if not isinstance(band, (int, np.integer, str)):
