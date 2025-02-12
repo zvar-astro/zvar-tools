@@ -1,7 +1,6 @@
 import os
 from typing import Tuple, List, Union
 import numpy as np
-import time
 import h5py
 from astropy.coordinates import SkyCoord
 
@@ -12,14 +11,16 @@ from penquins import Kowalski
 
 from zvartools.spatial import get_field_id, great_circle_distance
 from zvartools.enums import FILTER2IDX
-from zvartools.lightcurves import cleanup_lightcurve
+from zvartools.lightcurves import cleanup_lightcurve, adu_to_jansky
 from zvartools.candidate import (
     VariabilityCandidate,
     add_gaia_xmatch_to_candidates,
     add_ps1_xmatch_to_candidates,
     add_allwise_xmatch_to_candidates,
     add_2mass_xmatch_to_candidates,
+    import_from_parquet,
 )
+from zvartools.enums import ALLOWED_BANDS
 
 
 class BaseDataSource:
@@ -238,7 +239,7 @@ class BaseDataSource:
                     ]
                 )
             else:  # if the source is detected in this exposure
-                flux_jy, flux_err_jy = BaseDataSource.adu_to_jansky(
+                flux_jy, flux_err_jy = adu_to_jansky(
                     float(raw_photometry[i][0]),
                     float(raw_photometry[i][1]),
                     exptimes[i],
@@ -800,6 +801,49 @@ class BaseDataSource:
         """
         self.validate_add_data_parameters(candidates, "2MASS")
         return add_2mass_xmatch_to_candidates(self.kowalski, candidates, radius)
+
+    def load_variability_candidate_dataset(
+        self, fields: List[int], bands: List[str] = ALLOWED_BANDS, path: str = None
+    ) -> List[VariabilityCandidate]:
+        """
+        Load the variability candidates dataset
+
+        Parameters
+        ----------
+        fields: list
+            A list of fields to load
+        bands: list
+            A list of bands to load
+        max_candidates: int
+            The maximum number of candidates to load
+        path: str
+            The path to the datasets
+
+        Returns
+        -------
+        dict
+            A dictionary with the loaded candidates
+        """
+        if path is None:
+            raise ValueError("Path to the datasets is required")
+
+        candidates = []
+        # check if a directory exists at that path
+        if not os.path.isdir(path):
+            raise ValueError(f"Path {path} does not exist")
+
+        for field in fields:
+            for band in bands:
+                filename = f"{path}/{field:04d}/fpw_{field:04d}_z{band}.parquet"
+                if not os.path.isfile(filename):
+                    if self.verbose:
+                        print(f"File {filename} not found")
+                    continue
+
+                candidates_temp = import_from_parquet(filename)
+                candidates.extend(candidates_temp)
+
+        return candidates
 
 
 class RemoteDataSource(BaseDataSource):

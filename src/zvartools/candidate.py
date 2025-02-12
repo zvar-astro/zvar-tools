@@ -159,6 +159,15 @@ class VariabilityCandidate:
         self.set_2mass(twomass)
         self.set_allwise(allwise)
 
+    @property
+    def period(self):
+        """
+        Calculate the period of the candidate, in hours
+        """
+        if self.freq is None:
+            return None
+        return 1 / self.freq * 24
+
     def set_ps1(
         self,
         ps1: Union[PS1Match, dict, None],
@@ -714,6 +723,12 @@ def import_from_parquet(path: str, best_m_only=True) -> List[VariabilityCandidat
     df = pd.read_parquet(path)
     candidate_list = []
 
+    # get the filter from the path name
+    try:
+        band = str(path.split("_z")[-1].split(".")[0])
+    except ValueError:
+        band = None
+
     for _, row in df.iterrows():
         ps1_data = (
             {
@@ -770,6 +785,7 @@ def import_from_parquet(path: str, best_m_only=True) -> List[VariabilityCandidat
                 field=row.get("field"),
                 ccd=row.get("ccd"),
                 quad=row.get("quad"),
+                band=band,
                 ps1=ps1_data,
                 gaia=gaia_data,
                 twomass=twomass_data,
@@ -793,6 +809,7 @@ def import_from_parquet(path: str, best_m_only=True) -> List[VariabilityCandidat
                 field=row.get("field"),
                 ccd=row.get("ccd"),
                 quad=row.get("quad"),
+                band=band,
                 ps1=ps1_data,
                 gaia=gaia_data,
                 twomass=twomass_data,
