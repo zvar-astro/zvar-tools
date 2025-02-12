@@ -22,7 +22,9 @@ jobs:
           uv build
       - name: Push wheel to PyPI
         run: |
+          set +e
           uv publish
+          echo "exitcode=$?" >> $GITHUB_OUTPUT
         env:
           UV_PUBLISH_TOKEN: ${{ secrets.UV_PUBLISH_TOKEN }}
           UV_PUBLISH_CHECK_URL: https://test.pypi.org/legacy/
