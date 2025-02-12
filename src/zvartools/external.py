@@ -1,6 +1,7 @@
 import json
 import os
 from typing import List
+from typing import Tuple
 
 import numpy as np
 from penquins import Kowalski
@@ -9,6 +10,21 @@ from zvartools.spatial import great_circle_distance
 
 
 def connect_to_kowalski(path_credentials: str, verbose: bool = True) -> Kowalski:
+    """
+    Connect to Kowalski using the credentials file
+
+    Parameters
+    ----------
+    path_credentials : str
+        Path to the JSON file with the Kowalski credentials
+    verbose : bool
+        Verbosity level
+
+    Returns
+    -------
+    Kowalski
+        Kowalski instance
+    """
     if path_credentials is None:
         raise ValueError("Credentials file must be specified")
     if not os.path.exists(path_credentials):
@@ -30,7 +46,19 @@ def connect_to_kowalski(path_credentials: str, verbose: bool = True) -> Kowalski
     return k
 
 
-def validate_gaia_source(source):
+def validate_gaia_source(source: dict) -> Tuple[bool, str]:
+    """
+    Validate a Gaia source
+
+    Parameters
+    ----------
+    source : dict
+
+    Returns
+    -------
+    Tuple[bool, str]
+        Validity of the source and the reason for invalidity
+    """
     if not isinstance(source, dict):
         return False, "Source must be a dictionary"
     for band in ["g", "bp", "rp"]:
@@ -51,7 +79,19 @@ def validate_gaia_source(source):
     return True, None
 
 
-def validate_positional_source(source):
+def validate_positional_source(source: dict) -> Tuple[bool, str]:
+    """
+    Validate a positional source
+
+    Parameters
+    ----------
+    source : dict
+
+    Returns
+    -------
+    Tuple[bool, str]
+        Validity of the source and the reason for invalidity
+    """
     if not isinstance(source, dict):
         return False, "Source must be a dictionary"
     ra, dec = source.get("ra"), source.get("dec")
@@ -72,6 +112,37 @@ def query_cone_search(
     projection: dict = None,
     validate: callable = None,
 ) -> dict:
+    """
+    Query Kowalski with a cone search
+
+    Parameters
+    ----------
+    k : Kowalski
+        Kowalski instance
+    ids : List[int]
+        List of IDs
+    ras : List[int]
+        List of RAs
+    decs : List[int]
+        List of Decs
+    radius : float
+        Radius in arcseconds
+    id_field : str
+        ID field
+    batch_size : int
+        Batch size
+    catalog : str
+        Catalog name
+    projection : dict
+        Projection
+    validate : callable
+        Validation function
+
+    Returns
+    -------
+    dict
+        Query results
+    """
     if not isinstance(k, Kowalski):
         raise ValueError("Kowalski must be an instance of the Kowalski class")
     if not isinstance(ids, list):
@@ -184,6 +255,29 @@ def query_by_id(
     catalog: str = None,
     projection: dict = None,
 ):
+    """
+    Query Kowalski by ID
+
+    Parameters
+    ----------
+    k : Kowalski
+        Kowalski instance
+    ids : List[int]
+        List of IDs
+    id_field : str
+        ID field
+    batch_size : int
+        Batch size
+    catalog : str
+        Catalog name
+    projection : dict
+        Projection
+
+    Returns
+    -------
+    dict
+        Query results
+    """
     if not isinstance(k, Kowalski):
         raise ValueError("Kowalski must be an instance of the Kowalski class")
     if not isinstance(ids, list):
@@ -238,6 +332,52 @@ def query_by_id(
     return results
 
 
+def query_ps1(
+    k: Kowalski,
+    ids: List[int],
+    batch_size: int = 1000,
+):
+    """
+    Query PanSTARRS1
+
+    Parameters
+    ----------
+    k : Kowalski
+        Kowalski instance
+    ids : List[int]
+        List of IDs
+    batch_size : int
+        Batch size
+
+    Returns
+    -------
+    dict
+        Query results
+    """
+    return query_by_id(
+        k=k,
+        ids=ids,
+        id_field="_id",
+        batch_size=batch_size,
+        catalog="PS1_DR1",
+        projection={
+            "_id": 1,
+            "ra": 1,
+            "dec": 1,
+            "gMeanPSFMag": 1,
+            "gMeanPSFMagErr": 1,
+            "rMeanPSFMag": 1,
+            "rMeanPSFMagErr": 1,
+            "iMeanPSFMag": 1,
+            "iMeanPSFMagErr": 1,
+            "zMeanPSFMag": 1,
+            "zMeanPSFMagErr": 1,
+            "yMeanPSFMag": 1,
+            "yMeanPSFMagErr": 1,
+        },
+    )
+
+
 def query_gaia(
     k: Kowalski,
     ids: List[int],
@@ -246,6 +386,29 @@ def query_gaia(
     radius: float,
     batch_size: int = 1000,
 ):
+    """
+    Query Gaia
+
+    Parameters
+    ----------
+    k : Kowalski
+        Kowalski instance
+    ids : List[int]
+        List of IDs
+    ras : List[int]
+        List of RAs
+    decs : List[int]
+        List of Decs
+    radius : float
+        Radius in arcseconds
+    batch_size : int
+        Batch size
+
+    Returns
+    -------
+    dict
+        Query results
+    """
     return query_cone_search(
         k=k,
         ids=ids,
@@ -279,36 +442,6 @@ def query_gaia(
             "dec": 1,
         },
         validate=validate_gaia_source,
-        # validate=validate_positional_source,
-    )
-
-
-def query_ps1(
-    k: Kowalski,
-    ids: List[int],
-    batch_size: int = 1000,
-):
-    return query_by_id(
-        k=k,
-        ids=ids,
-        id_field="_id",
-        batch_size=batch_size,
-        catalog="PS1_DR1",
-        projection={
-            "_id": 1,
-            "ra": 1,
-            "dec": 1,
-            "gMeanPSFMag": 1,
-            "gMeanPSFMagErr": 1,
-            "rMeanPSFMag": 1,
-            "rMeanPSFMagErr": 1,
-            "iMeanPSFMag": 1,
-            "iMeanPSFMagErr": 1,
-            "zMeanPSFMag": 1,
-            "zMeanPSFMagErr": 1,
-            "yMeanPSFMag": 1,
-            "yMeanPSFMagErr": 1,
-        },
     )
 
 
@@ -320,6 +453,29 @@ def query_2mass(
     radius: float,
     batch_size: int = 1000,
 ):
+    """
+    Query 2MASS
+
+    Parameters
+    ----------
+    k : Kowalski
+        Kowalski instance
+    ids : List[int]
+        List of IDs
+    ras : List[int]
+        List of RAs
+    decs : List[int]
+        List of Decs
+    radius : float
+        Radius in arcseconds
+    batch_size : int
+        Batch size
+
+    Returns
+    -------
+    dict
+        Query results
+    """
     return query_cone_search(
         k=k,
         ids=ids,
@@ -351,6 +507,29 @@ def query_allwise(
     radius: float,
     batch_size: int = 1000,
 ):
+    """
+    Query AllWISE
+
+    Parameters
+    ----------
+    k : Kowalski
+        Kowalski instance
+    ids : List[int]
+        List of IDs
+    ras : List[int]
+        List of RAs
+    decs : List[int]
+        List of Decs
+    radius : float
+        Radius in arcseconds
+    batch_size : int
+        Batch size
+
+    Returns
+    -------
+    dict
+        Query results
+    """
     return query_cone_search(
         k=k,
         ids=ids,
@@ -385,6 +564,29 @@ def query_galex(
     radius: float,
     batch_size: int = 1000,
 ):
+    """
+    Query GALEX
+
+    Parameters
+    ----------
+    k : Kowalski
+        Kowalski instance
+    ids : List[int]
+        List of IDs
+    ras : List[int]
+        List of RAs
+    decs : List[int]
+        List of Decs
+    radius : float
+        Radius in arcseconds
+    batch_size : int
+        Batch size
+
+    Returns
+    -------
+    dict
+        Query results
+    """
     return query_cone_search(
         k=k,
         ids=ids,

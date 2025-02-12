@@ -3,9 +3,28 @@ from typing import List, Tuple
 import numpy as np
 
 
-def remove_nans(
+def remove_nondetections(
     time: np.ndarray, flux: np.ndarray, flux_err: np.ndarray, filter: np.ndarray
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Remove data points with flux = NaN
+
+    Parameters
+    ----------
+    time : np.ndarray
+        Time of observation
+    flux : np.ndarray
+        Flux of the object
+    flux_err : np.ndarray
+        Error in the flux
+    filter : np.ndarray
+        Filter used for the observation
+
+    Returns
+    -------
+    Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]
+        Time, flux, flux_err, filter with NaN values removed
+    """
     mask = np.isnan(flux)
     return (
         time[~mask],
@@ -16,6 +35,19 @@ def remove_nans(
 
 
 def get_cdf(data: np.ndarray) -> np.ndarray:
+    """
+    Get the Cumulative Distribution Function (CDF) of the data
+
+    Parameters
+    ----------
+    data : np.ndarray
+        Data to calculate the CDF for
+
+    Returns
+    -------
+    np.ndarray
+        Bin centers and CDF values
+    """
     # Filter data to include only values greater than 0
     filtered_data = data[data > 0]
 
@@ -29,6 +61,21 @@ def get_cdf(data: np.ndarray) -> np.ndarray:
 
 
 def get_extrema(data: np.ndarray, cdf_value: float = 0.999) -> np.ndarray:
+    """
+    Get the extrema of the data
+
+    Parameters
+    ----------
+    data : np.ndarray
+        Data to calculate the extrema for (e.g. flux)
+    cdf_value : float, optional
+        CDF value to use as the threshold, by default 0.999
+
+    Returns
+    -------
+    np.ndarray
+        Indices of the extrema
+    """
     bin_centers, cdf = get_cdf(data)
 
     threshold_index = np.searchsorted(cdf, cdf_value)
@@ -39,14 +86,31 @@ def get_extrema(data: np.ndarray, cdf_value: float = 0.999) -> np.ndarray:
 
 
 def get_string_length(
-    candidate,
+    candidate: object,
     photometry: List[np.ndarray],
     period: float = None,
-):
+) -> float:
+    """
+    Calculate the string length of the candidate
+
+    Parameters
+    ----------
+    candidate : VariableCandidate
+        Variable candidate
+    photometry : List[np.ndarray]
+        Photometry data
+    period : float, optional
+        Period of the candidate, by default None
+
+    Returns
+    -------
+    float
+        String length of the candidate
+    """
     if period is None:
         period = 1 / candidate.freq
     # remove data points with flux = NaN
-    time, flux, _, _ = remove_nans(
+    time, flux, _, _ = remove_nondetections(
         photometry[0], photometry[1], photometry[2], photometry[3]
     )
 
@@ -74,12 +138,34 @@ def get_string_length(
 
 
 def get_entropy(
-    candidate, photometry: List[np.ndarray], period: float = None, num_bins=10
+    candidate: object,
+    photometry: List[np.ndarray],
+    period: float = None,
+    num_bins: int = 10,
 ):
+    """
+    Calculate the entropy of the candidate
+
+    Parameters
+    ----------
+    candidate : VariableCandidate
+        Variable candidate
+    photometry : List[np.ndarray]
+        Photometry data
+    period : float, optional
+        Period of the candidate, by default None
+    num_bins : int, optional
+        Number of bins to use for the entropy calculation, by default 10
+
+    Returns
+    -------
+    Tuple[float, float, float, float]
+        Entropy, minimum entropy, negative entropy expectation, sigma expectation
+    """
     if period is None:
         period = 1 / candidate.freq
     # remove data points with flux = NaN
-    time, flux, _, _ = remove_nans(
+    time, flux, _, _ = remove_nondetections(
         photometry[0], photometry[1], photometry[2], photometry[3]
     )
 

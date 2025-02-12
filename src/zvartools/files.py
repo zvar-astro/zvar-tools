@@ -7,7 +7,34 @@ from zvartools.enums import FILTERS
 from zvartools.spatial import get_field_id
 
 
-def get_files_list(ra, dec, prefix="data", bands=FILTERS, limit_fields=None):
+def get_files_list(
+    ra: float,
+    dec: float,
+    prefix: str = "data",
+    bands: list = FILTERS,
+    limit_fields=None,
+):
+    """
+    Get the list of files for a given RA and Dec
+
+    Parameters
+    ----------
+    ra : float
+        Right ascension
+    dec : float
+        Declination
+    prefix : str, optional
+        Prefix for the files, by default "data"
+    bands : list, optional
+        Bands to include, by default FILTERS
+    limit_fields : list, optional
+        List of fields to limit the search to, by default None
+
+    Returns
+    -------
+    list
+        List of files
+    """
     if isinstance(limit_fields, list):
         limit_fields = list({int(f) for f in limit_fields})
     if not set(bands).issubset(FILTERS):
@@ -31,8 +58,30 @@ def get_files_list(ra, dec, prefix="data", bands=FILTERS, limit_fields=None):
 
 
 def get_files(
-    files, local_path, ssh_client: paramiko.SSHClient = None, remote_path=None
+    files: list,
+    local_path: str,
+    ssh_client: paramiko.SSHClient = None,
+    remote_path=None,
 ):
+    """
+    Get the files from the remote server
+
+    Parameters
+    ----------
+    files : list
+        List of files to download
+    local_path : str
+        Local path to download the files to
+    ssh_client : paramiko.SSHClient, optional
+        SSH client to use, by default None
+    remote_path : str, optional
+        Remote path to download the files from, by default None
+
+    Returns
+    -------
+    list
+        List of available files
+    """
     available_files = []
     missing_files = []
     for file in files:
@@ -72,9 +121,27 @@ def get_files(
     return available_files
 
 
-def get_ssh_client(host, username=None, password=None, pkey_path=None):
+def get_ssh_client(
+    host: str, username: str = None, password: str = None, pkey_path: str = None
+):
     """
-    Create an scp client
+    Create an ssh client
+
+    Parameters
+    ----------
+    host : str
+        Hostname
+    username : str, optional
+        Username, by default None
+    password : str, optional
+        Password, by default None
+    pkey_path : str, optional
+        Path to the private key, by default None
+
+    Returns
+    -------
+    paramiko.SSHClient
+        SSH client
     """
     if not username and not password and not pkey_path:
         raise ValueError("Either username and password or pkey_path must be provided")

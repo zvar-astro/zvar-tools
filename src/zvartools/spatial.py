@@ -3,8 +3,6 @@ import os
 import numpy as np
 from numba import njit
 
-FIELDNO, RA_ALL, DEC_ALL = None, None, None
-
 CCD_LAYOUT_X = [
     -3.646513,
     -3.647394,
@@ -143,6 +141,8 @@ CCD_LAYOUT_Y = [
 # in radians
 ADIST_MAX = 5.66 * np.pi / 180.0
 
+DEGRA = np.pi / 180.0
+
 
 class ZTFFieldData:
     fieldno = None
@@ -153,38 +153,77 @@ class ZTFFieldData:
         self.fieldno, self.ra_all, self.dec_all = self._get_fields_data()
 
     def _get_fields_data(self):
+        """
+        Load the ZTF field data from the file ZTF_Fields.txt
+
+        Returns
+        -------
+        tuple
+            fieldno, ra_all, dec_all
+        """
         if self.fieldno is not None:
-            return FIELDNO, RA_ALL, DEC_ALL
+            return self.fieldno, self.ra_all, self.dec_all
 
         field_path = os.path.join(os.path.dirname(__file__), "./data/ZTF_Fields.txt")
         _fieldno, _ra_all, _dec_all = np.loadtxt(
             field_path, unpack=True, usecols=(0, 1, 2), dtype="int,float,float"
         )
-        # convert to radians
-        _ra_all *= np.pi / 180.0
-        _dec_all *= np.pi / 180.0
-        return _fieldno, _ra_all, _dec_all
+        return _fieldno, _ra_all * DEGRA, _dec_all * DEGRA
 
 
 ZTFFieldData = ZTFFieldData()
 
 
 @njit
-def fit_line(x, x0, y0, x1, y1):
+def fit_line(x: float, x0: float, y0: float, x1: float, y1: float) -> float:
     """
     Fit a linear function connecting two points (x0,y0) and (x1,y1)
     and evaluate its value at point x.
+
+    Parameters
+    ----------
+    x : float
+        x-coordinate of the point
+    x0 : float
+        x-coordinate of the first point
+    y0 : float
+        y-coordinate of the first point
+    x1 : float
+        x-coordinate of the second point
+    y1 : float
+        y-coordinate of the second point
+
+    Returns
+    -------
+    float
+        y-coordinate of the point on the line
     """
 
     return (y1 - y0) * (x - x0) / (x1 - x0) + y0
 
 
 @njit
-def ortographic_projection(ra, dec, ra0, dec0):
+def ortographic_projection(ra: float, dec: float, ra0: float, dec0: float) -> tuple:
     """
     Calculate the ortographic projection onto the (x,y) tangent plane
     with the origin at (ra0,dec0)
     See: https://en.wikipedia.org/wiki/Orthographic_map_projection
+
+    Parameters
+    ----------
+    ra : float
+        Right ascension of the object
+    dec : float
+        Declination of the object
+    ra0 : float
+        Right ascension of the origin
+    dec0 : float
+        Declination of the origin
+
+    Returns
+    -------
+    tuple
+        x, y coordinates of the object
     """
 
     x = -np.cos(dec) * np.sin(ra - ra0)
@@ -197,7 +236,7 @@ def ortographic_projection(ra, dec, ra0, dec0):
 
 
 @njit
-def inside_polygon(xp, yp, x, y):
+def inside_polygon(xp: float, yp: float, x: list, y: list) -> tuple:
     """
     Check if the given point (xp,yp) is located within the field of view
     of the ZTF camera.
@@ -208,6 +247,22 @@ def inside_polygon(xp, yp, x, y):
     returned.
     (x,y) are arrays containing the coordinates of CCD vertices, see
     http://www.oir.caltech.edu/twiki_ptf/pub/ZTF/ZTFFieldGrid/ZTF_CCD_Layout.tbl
+
+    Parameters
+    ----------
+    xp : float
+        x-coordinate of the object
+    yp : float
+        y-coordinate of the object
+    x : list
+        x-coordinates of CCD vertices
+    y : list
+        y-coordinates of CCD vertices
+
+    Returns
+    -------
+    tuple
+        ccd, quadrant number
     """
 
     for i in range(16):
@@ -257,14 +312,27 @@ def inside_polygon(xp, yp, x, y):
 
 
 @njit
-def great_circle_distance_rad(ra1, dec1, ra2, dec2):
+def great_circle_distance_rad(
+    ra1: float, dec1: float, ra2: float, dec2: float
+) -> float:
     """
-        Distance between two points on the sphere
-    :param ra1_deg:
-    :param dec1_deg:
-    :param ra2_deg:
-    :param dec2_deg:
-    :return: distance in radias
+    Distance between two points on the sphere
+
+    Parameters
+    ----------
+    ra1 : float
+        Right ascension of the first object
+    dec1 : float
+        Declination of the first object
+    ra2 : float
+        Right ascension of the second object
+    dec2 : float
+        Declination of the second object
+
+    Returns
+    -------
+    float
+        Distance between two points in radians
     """
     delta_ra = np.abs(ra2 - ra1)
     distance = np.arctan2(
@@ -282,17 +350,28 @@ def great_circle_distance_rad(ra1, dec1, ra2, dec2):
 
 
 @njit
-def great_circle_distance(ra1_deg, dec1_deg, ra2_deg, dec2_deg):
+def great_circle_distance(
+    ra1_deg: float, dec1_deg: float, ra2_deg: float, dec2_deg: float
+) -> float:
     """
-        Distance between two points on the sphere
-    :param ra1_deg:
-    :param dec1_deg:
-    :param ra2_deg:
-    :param dec2_deg:
-    :return: distance in degrees
+    Distance between two points on the sphere
+
+    Parameters
+    ----------
+    ra1_deg : float
+        Right ascension of the first object in degrees
+    dec1_deg : float
+        Declination of the first object in degrees
+    ra2_deg : float
+        Right ascension of the second object in degrees
+    dec2_deg : float
+        Declination of the second object in degrees
+
+    Returns
+    -------
+    float
+        Distance between two points in degrees
     """
-    # this is orders of magnitude faster than astropy.coordinates.Skycoord.separation
-    DEGRA = np.pi / 180.0
     ra1, dec1, ra2, dec2 = (
         ra1_deg * DEGRA,
         dec1_deg * DEGRA,
@@ -302,7 +381,7 @@ def great_circle_distance(ra1_deg, dec1_deg, ra2_deg, dec2_deg):
     return great_circle_distance_rad(ra1, dec1, ra2, dec2) / DEGRA
 
 
-def get_field_id(ra, dec):
+def get_field_id(ra: float, dec: float):
     """
     Find the field, ccd, and quadrant number for a given object.
     ra, dec are coordinates of the object (in degrees), fieldno,
@@ -311,10 +390,22 @@ def get_field_id(ra, dec):
     These calculations are approximate and may fail if the object
     is located close to the edge of the field of view / edge of the
     reference image.
+
+    Parameters
+    ----------
+    ra : float
+        Right ascension of the object in degrees
+    dec : float
+        Declination of the object in degrees
+
+    Returns
+    -------
+    list
+        List of field, ccd, and quadrant number
     """
 
-    ra = ra * np.pi / 180.0  # convert to radians
-    dec = dec * np.pi / 180.0  # convert to radians
+    ra = ra * DEGRA
+    dec = dec * DEGRA
 
     nf = len(ZTFFieldData.fieldno)
 

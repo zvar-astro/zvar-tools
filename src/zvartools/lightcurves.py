@@ -7,34 +7,34 @@ import numpy as np
 from zvartools.enums import FILTERS
 
 
-def process_curve(
-    time: list, flux: list, flux_err: list, filter: list
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    time *= 86400  # Convert from BJD to BJS
-    time += 15  # midpoint correct ZTF timestamps
-    time -= np.min(time)  # Subtract off the zero point (ephemeris may be added later)
-
-    # Set nan values to zero
-    # flux[np.isnan(flux)] = 0
-    # flux_err[flux == 0] = np.inf
-
-    mad = np.nanmedian(np.abs(flux - np.nanmedian(flux)))
-    valid = np.where((np.abs(flux) < 1.483 * mad) | (np.isnan(flux)))
-    time = time[valid]
-    flux = flux[valid]
-    flux_err = flux_err[valid]
-    filter = filter[valid]
-
-    # subtract off the mean (of non-NaN values)
-
-    # flux -= np.mean(flux[np.isnan(flux) == False])  # noqa E712
-
-    return time, flux, flux_err, filter
-
-
 def remove_deep_drilling(
     time: np.ndarray, flux: np.ndarray, flux_err: np.ndarray, filter: np.ndarray
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Remove deep drilling data from a light curve.
+
+    Parameters
+    ----------
+    time : np.ndarray
+        List of timestamps
+    flux : np.ndarray
+        List of flux values
+    flux_err : np.ndarray
+        List of flux errors
+    filter : np.ndarray
+        List of filters
+
+    Returns
+    -------
+    time : np.ndarray
+        Processed timestamps
+    flux : np.ndarray
+        Processed flux values
+    flux_err : np.ndarray
+        Processed flux errors
+    filter : np.ndarray
+        Processed filters
+    """
     if len(time) == 0:
         return time, flux, flux_err, filter
     dt = 40.0  # seconds
@@ -81,21 +81,76 @@ def remove_deep_drilling(
     return znew_times, znew_flux, znew_flux_err, znew_filter
 
 
-def remove_nans(
-    time: np.ndarray, flux: np.ndarray, flux_err: np.ndarray, filter: np.ndarray
+def cleanup_lightcurve(
+    time: list, flux: list, flux_err: list, filter: list
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    mask = np.isnan(flux)
-    return (
-        time[~mask],
-        flux[~mask],
-        flux_err[~mask],
-        filter[~mask],
-    )
+    """
+    Process a light curve by removing NaNs, outliers, and deep drilling fields.
+
+    Parameters
+    ----------
+    time : list
+        List of timestamps
+    flux : list
+        List of flux values
+    flux_err : list
+        List of flux errors
+    filter : list
+        List of filters
+
+    Returns
+    -------
+    time : np.ndarray
+        Processed timestamps
+    flux : np.ndarray
+        Processed flux values
+    flux_err : np.ndarray
+        Processed flux errors
+    filter : np.ndarray
+        Processed filters
+    """
+    time *= 86400  # Convert from BJD to BJS
+    time += 15  # midpoint correct ZTF timestamps
+    time -= np.min(time)  # Subtract off the zero point
+
+    mad = np.nanmedian(np.abs(flux - np.nanmedian(flux)))
+    valid = np.where((np.abs(flux) < 1.483 * mad) | (np.isnan(flux)))
+    time = time[valid]
+    flux = flux[valid]
+    flux_err = flux_err[valid]
+    filter = filter[valid]
+
+    # subtract off the mean (of non-NaN values)
+    # flux -= np.mean(flux[np.isnan(flux) == False])  # noqa E712
+
+    # Remove deep drilling fields
+    time, flux, flux_err, filter = remove_deep_drilling(time, flux, flux_err, filter)
+
+    return time, flux, flux_err, filter
 
 
 def freq_grid(
     t: np.ndarray, fmin: float = None, fmax: float = None, oversample: int = 3
 ) -> np.ndarray:
+    """
+    Generate a frequency grid for a given time series.
+
+    Parameters
+    ----------
+    t : np.ndarray
+        List of timestamps
+    fmin : float, optional
+        Minimum frequency, by default None
+    fmax : float, optional
+        Maximum frequency, by default None
+    oversample : int, optional
+        Oversampling factor, by default 3
+
+    Returns
+    -------
+    np.ndarray
+        Frequency grid
+    """
     trange = max(t) - min(t)
     texp = np.nanmin(np.diff(np.sort(t)))
     fres = 1.0 / trange / oversample
@@ -107,12 +162,58 @@ def freq_grid(
     return fgrid
 
 
+def remove_nondetections(
+    time: np.ndarray, flux: np.ndarray, flux_err: np.ndarray, filter: np.ndarray
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Remove non-detections from a light curve.
+
+    Parameters
+    ----------
+    time : list
+        List of timestamps
+    flux : list
+        List of flux values
+    flux_err : list
+        List of flux errors
+    filter : list
+        List of filters
+
+    Returns
+    -------
+    time : np.ndarray
+        Processed timestamps
+    flux : np.ndarray
+        Processed flux values
+    flux_err : np.ndarray
+        Processed flux errors
+    filter : np.ndarray
+        Processed filters
+    """
+
+    mask = np.isnan(flux)
+    return (
+        time[~mask],
+        flux[~mask],
+        flux_err[~mask],
+        filter[~mask],
+    )
+
+
 def flag_terrestrial_freq(frequencies: np.ndarray) -> np.ndarray:
     """
     Function to identify and flag terrestrial frequencies
     from an array of frequency values.
 
-    frequencies = numpy array of frequencies in Hz
+    Parameters
+    ----------
+    frequencies : np.ndarray
+        Array of frequencies in Hz
+
+    Returns
+    -------
+    np.ndarray
+        Array of flags indicating whether each frequency is terrestrial
     """
     # Define some standard frequencies in terms of Hz
     f_year = 0.002737803 / 86400  # Sidereal year (365.256363 days)
@@ -163,10 +264,37 @@ def flag_terrestrial_freq(frequencies: np.ndarray) -> np.ndarray:
 
 
 def minify_lightcurve(
-    field, ccd, quad, bands, psids, path_lc, out_dir_lc=None, delete_existing=False
+    field: int,
+    ccd: int,
+    quad: int,
+    bands: list,
+    psids: list,
+    path_lc: str,
+    out_dir_lc: str = None,
+    delete_existing: bool = False,
 ):
-    # given a path to a lightcurve file and a list of psids,
-    # create a "minified" version of the lightcurve file containing only the photometry for the given psids
+    """
+    Minify a lightcurve file (matchfile), only keeping the photometry and sources for a given list.
+
+    Parameters
+    ----------
+    field : int
+        Field number
+    ccd : int
+        CCD number
+    quad : int
+        Quadrant number
+    bands : list
+        List of bands
+    psids : list
+        List of PS1 IDs
+    path_lc : str
+        Path to the lightcurve file
+    out_dir_lc : str, optional
+        Output directory, by default None
+    delete_existing : bool, optional
+        Whether to delete existing files, by default False
+    """
     if len(psids) == 0:
         raise ValueError("psids must be provided")
     if path_lc is None:
@@ -254,7 +382,7 @@ def minify_lightcurve(
     return
 
 
-def adu_to_jansky(flux_adu, flux_err_adu, exptime, mzpsci):
+def adu_to_jansky(flux_adu: float, flux_err_adu: float, exptime: float, mzpsci: float):
     """
     Convert ZTF flux measurements from ADU to Jansky, accounting for the
     instrument's electron/ADU gain and exposure time.

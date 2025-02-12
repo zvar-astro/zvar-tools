@@ -1,5 +1,5 @@
 import os
-from typing import Tuple, List
+from typing import Tuple, List, Union
 import numpy as np
 import time
 import h5py
@@ -12,7 +12,7 @@ from penquins import Kowalski
 
 from zvartools.spatial import get_field_id, great_circle_distance
 from zvartools.enums import FILTER2IDX
-from zvartools.lightcurves import process_curve, remove_deep_drilling
+from zvartools.lightcurves import cleanup_lightcurve
 from zvartools.candidate import (
     VariabilityCandidate,
     add_gaia_xmatch_to_candidates,
@@ -25,8 +25,31 @@ from zvartools.candidate import (
 class BaseDataSource:
     @staticmethod
     def add_kowalski(**kwargs):
-        # if the is a kowalski_protocol, kowalski_host, kowalski_port, kowalski_token
-        # or kowalski_user and kowalski_password, we should add a Kowalski instance
+        """
+        Add a Kowalski instance if the required parameters are provided
+
+        Parameters
+        ----------
+        kowalski_protocol: str
+            The protocol to use to connect to Kowalski
+        kowalski_host: str
+            The host to connect to
+        kowalski_port: int
+            The port to connect to
+        kowalski_token: str
+            The token to use to authenticate, if provided, it will take precedence over kowalski_user and kowalski_password
+        kowalski_user: str
+            The user to use to authenticate, if not using a token
+        kowalski_password: str
+            The password to use to authenticate, if not using a token
+        verbose: bool
+            Whether to print debug information when interacting with Kowalski
+
+        Returns
+        -------
+        Kowalski or None
+            A Kowalski instance if the required parameters are provided, None otherwise
+        """
         if (
             kwargs.get("kowalski_protocol")
             and kwargs.get("kowalski_host")
@@ -56,7 +79,12 @@ class BaseDataSource:
             return k
         return None
 
-    def __init__(self, local_lightcurve_path, local_period_path, **kwargs):
+    def __init__(
+        self,
+        local_lightcurve_path: str,
+        local_period_path: str,
+        **kwargs,
+    ):
         self.local_lightcurve_path = local_lightcurve_path
         self.local_period_path = local_period_path
         self.kwargs = kwargs
@@ -69,8 +97,23 @@ class BaseDataSource:
         self.kowalski = self.add_kowalski(**kwargs)
 
     def check_file_availability(
-        self, data: Tuple[int, int, int, str], type="lightcurve"
+        self, data: Tuple[int, int, int, str], type: str = "lightcurve"
     ) -> Tuple[List, List]:
+        """
+        Check if the files are available locally, if not, return the missing files
+
+        Parameters
+        ----------
+        data: Tuple[int, int, int, str]
+            The data to check, a list of tuples with field, ccd, quad, band
+        type: str
+            The type of data to check, either lightcurve or period
+
+        Returns
+        -------
+        Tuple[List, List]
+            A tuple with two lists, the first one containing the available files, the second one the missing files
+        """
         base_dir, prefix = None, None
         if type == "lightcurve":
             base_dir, prefix = self.local_lightcurve_path, "data"
@@ -93,6 +136,21 @@ class BaseDataSource:
         return available, missing
 
     def get_files(self, data: Tuple[int, int, int, str], type="lightcurve") -> List:
+        """
+        Get the files locally, if they are not available, download them
+
+        Parameters
+        ----------
+        data: Tuple[int, int, int, str]
+            The data to check, a list of tuples with field, ccd, quad, band
+        type: str
+            The type of data to check, either lightcurve or period
+
+        Returns
+        -------
+        List
+            A list of the available files
+        """
         available, missing = self.check_file_availability(data, type)
         if len(missing) > 0:
             if "download_files" in self.implements:
@@ -110,12 +168,57 @@ class BaseDataSource:
     def download_files(
         self, data: Tuple[int, int, int, str], type="lightcurve"
     ) -> List:
+        """
+        Download the files from the remote server (only implemented in the child classes)
+
+        Parameters
+        ----------
+        data: Tuple[int, int, int, str]
+            The data to download, a list of tuples with field, ccd, quad, band
+        type: str
+            The type of data to download, either lightcurve or period
+
+        Raises
+        ------
+        NotImplementedError
+            This method should be implemented in the child classes
+        """
         raise NotImplementedError(
             "This method should be implemented in the child classes"
         )
 
     @staticmethod
-    def read_lightcurve_by_idx(idx, sources_data, times, band, zeropoints, exptimes):
+    def read_lightcurve_by_idx(
+        idx: int,
+        sources_data: h5py.Dataset,
+        times: np.array,
+        band: str,
+        zeropoints: np.array,
+        exptimes: np.array,
+    ) -> List:
+        """
+        Read the lightcurve data for a given source index
+
+        Parameters
+        ----------
+        idx: int
+            The index of the source
+        sources_data: h5py.Dataset
+            The dataset containing the sources data
+        times: np.array
+            The times of the exposures
+        band: str
+            The band of the exposures
+        zeropoints: np.array
+            The zeropoints of the exposures
+        exptimes: np.array
+            The exposure times
+
+        Returns
+        -------
+        List
+            A list of the photometry data, of shape (time, flux, flux_err, band) x nb_exposures
+        """
         nb_exposures = len(times)
         start, end = idx * nb_exposures, (idx + 1) * nb_exposures
 
@@ -161,7 +264,22 @@ class BaseDataSource:
         return photometry
 
     @staticmethod
-    def read_period_by_idx(idx, dataset):
+    def read_period_by_idx(idx: int, dataset: h5py.File) -> Tuple:
+        """
+        Read the period data for a given source index
+
+        Parameters
+        ----------
+        idx: int
+            The index of the source
+        dataset: h5py.File
+            The dataset containing the period data
+
+        Returns
+        -------
+        Tuple
+            A tuple with the best frequency, significance, best M and valid flag
+        """
         try:
             freqs = dataset["bestFreqs"][idx * 50 * 3 : (idx + 1) * 50 * 3]
             sigs = dataset["significance"][idx * 50 * 3 : (idx + 1) * 50 * 3]
@@ -176,20 +294,54 @@ class BaseDataSource:
             return None, None, None, None
 
     @staticmethod
-    def merge_lightcurves(lightcurve_per_psid):
+    def process_lightcurves(lightcurve_per_psid: dict) -> dict:
+        """
+        Process the lightcurves for each source, cleaning them up and sorting them by time
+
+        Parameters
+        ----------
+        lightcurve_per_psid: dict
+            A dictionary with a list of lightcurves for each source
+
+        Returns
+        -------
+        dict
+            A dictionary with the cleaned up lightcurves for each source
+        """
+
         for id, photometry in lightcurve_per_psid.items():
             if not photometry:
                 print(f"No photometry for {id} found in any file")
                 continue
             lightcurve_per_psid[id] = np.array(sorted(photometry, key=lambda x: x[0])).T
-            lightcurve_per_psid[id] = process_curve(*lightcurve_per_psid[id])
-            lightcurve_per_psid[id] = remove_deep_drilling(*lightcurve_per_psid[id])
-
+            lightcurve_per_psid[id] = cleanup_lightcurve(*lightcurve_per_psid[id])
             lightcurve_per_psid[id] = np.array(lightcurve_per_psid[id], order="C")
 
         return lightcurve_per_psid
 
-    def cone_search(self, targets, radius=2.0, max_matches=None):
+    def cone_search(
+        self,
+        targets: Union[list, tuple],
+        radius: float = 2.0,
+        max_matches: Union[int, None] = None,
+    ):
+        """
+        Perform a cone search around the given targets
+
+        Parameters
+        ----------
+        targets: list
+            A list of targets, each target can be a tuple, list, dict, SkyCoord or object with ra and dec attributes
+        radius: float
+            The radius of the cone search in arcseconds
+        max_matches: int
+            The maximum number of matches to return
+
+        Returns
+        -------
+        dict, dict
+            A dictionary with the sources found for each target, a dictionary with the lightcurves for each source
+        """
         fieldccdquad2radec = {}
         if isinstance(targets, (list, tuple)) and all(
             isinstance(t, (list, tuple)) and len(t) == 2 for t in targets
@@ -337,11 +489,24 @@ class BaseDataSource:
                     valid=radec2sources[key][i].get("valid", None),
                 )
 
-        lightcurve_per_psid = self.merge_lightcurves(lightcurve_per_psid)
+        lightcurve_per_psid = self.process_lightcurves(lightcurve_per_psid)
 
         return radec2sources, lightcurve_per_psid
 
-    def psid_search(self, pstargets):
+    def psid_search(self, pstargets: Union[list, tuple]):
+        """
+        Search for the given Pan-STARRs targets
+
+        Parameters
+        ----------
+        pstargets: list
+            A list of Pan-STARRs targets, each target can be a tuple, list, dict or object with psid, field, ccd and quad attributes
+
+        Returns
+        -------
+        dict, dict
+            A dictionary with the sources found for each target, a dictionary with the lightcurves for each source
+        """
         if isinstance(pstargets, (list, tuple)) and all(
             isinstance(t, (list, tuple)) and len(t) == 4 for t in pstargets
         ):
@@ -436,7 +601,7 @@ class BaseDataSource:
                         "valid": valid,
                     }
 
-        lightcurve_per_psid = self.merge_lightcurves(lightcurve_per_psid)
+        lightcurve_per_psid = self.process_lightcurves(lightcurve_per_psid)
 
         # then create the VariabilityCandidate objects
         candidates = {}
@@ -461,7 +626,20 @@ class BaseDataSource:
 
         return candidates, lightcurve_per_psid
 
-    def get_candidates_lightcurves(self, candidates):
+    def get_candidates_lightcurves(self, candidates: List[VariabilityCandidate]):
+        """
+        Get the lightcurves for the given candidates
+
+        Parameters
+        ----------
+        candidates: list
+            A list of VariabilityCandidate objects
+
+        Returns
+        -------
+        dict
+            A dictionary with the cleaned up lightcurves for each source
+        """
         if not isinstance(candidates, (list, tuple)) and all(
             isinstance(c, VariabilityCandidate) for c in candidates
         ):
@@ -507,11 +685,30 @@ class BaseDataSource:
                         lightcurve_per_psid[candidate.psid] = []
                     lightcurve_per_psid[candidate.psid].extend(lc)
 
-        lightcurve_per_psid = self.merge_lightcurves(lightcurve_per_psid)
+        lightcurve_per_psid = self.process_lightcurves(lightcurve_per_psid)
 
         return lightcurve_per_psid
 
-    def validate_add_data_parameters(self, candidates, catalog_name):
+    def validate_add_data_parameters(
+        self, candidates: List[VariabilityCandidate], catalog_name: str
+    ):
+        """
+        Validate the parameters for the add_data_to_candidates methods
+
+        Parameters
+        ----------
+        candidates: list
+            A list of VariabilityCandidate objects
+        catalog_name: str
+            The name of the catalog to add data from
+
+        Raises
+        ------
+        ValueError
+            If the candidates are not a list of VariabilityCandidate objects
+        ValueError
+            If the Kowalski instance is not provided
+        """
         if not isinstance(candidates, (list, tuple)) and all(
             isinstance(c, VariabilityCandidate) for c in candidates
         ):
@@ -524,19 +721,83 @@ class BaseDataSource:
                 f"Kowalski instance not provided, required to add {catalog_name} data to candidates"
             )
 
-    def add_gaia_data_to_candidates(self, candidates, radius=3.0):
-        self.validate_add_data_parameters(candidates, "Gaia")
-        return add_gaia_xmatch_to_candidates(self.kowalski, candidates, radius)
+    def add_ps1_data_to_candidates(self, candidates: List[VariabilityCandidate]):
+        """
+        Add Pan-STARRs data to the given candidates
 
-    def add_ps1_data_to_candidates(self, candidates):
+        Parameters
+        ----------
+        candidates: list
+            A list of VariabilityCandidate objects
+
+        Returns
+        -------
+        list
+            A list of the same candidates, with the Pan-STARRs data added
+        """
         self.validate_add_data_parameters(candidates, "Pan-STARRs")
         return add_ps1_xmatch_to_candidates(self.kowalski, candidates)
 
-    def add_allwise_data_to_candidates(self, candidates, radius=3.0):
+    def add_gaia_data_to_candidates(
+        self, candidates: List[VariabilityCandidate], radius: float = 3.0
+    ):
+        """
+        Add Gaia data to the given candidates
+
+        Parameters
+        ----------
+        candidates: list
+            A list of VariabilityCandidate objects
+        radius: float
+            The radius of the cone search in arcseconds
+
+        Returns
+        -------
+        list
+            A list of the same candidates, with the Gaia data added
+        """
+        self.validate_add_data_parameters(candidates, "Gaia")
+        return add_gaia_xmatch_to_candidates(self.kowalski, candidates, radius)
+
+    def add_allwise_data_to_candidates(
+        self, candidates: List[VariabilityCandidate], radius: float = 3.0
+    ):
+        """
+        Add AllWISE data to the given candidates
+
+        Parameters
+        ----------
+        candidates: list
+            A list of VariabilityCandidate objects
+        radius: float
+            The radius of the cone search in arcseconds
+
+        Returns
+        -------
+        list
+            A list of the same candidates, with the AllWISE data added
+        """
         self.validate_add_data_parameters(candidates, "AllWISE")
         return add_allwise_xmatch_to_candidates(self.kowalski, candidates, radius)
 
-    def add_2mass_data_to_candidates(self, candidates, radius=3.0):
+    def add_2mass_data_to_candidates(
+        self, candidates: List[VariabilityCandidate], radius: float = 3.0
+    ):
+        """
+        Add 2MASS data to the given candidates
+
+        Parameters
+        ----------
+        candidates: list
+            A list of VariabilityCandidate objects
+        radius: float
+            The radius of the cone search in arcseconds
+
+        Returns
+        -------
+        list
+            A list of the same candidates, with the 2MASS data added
+        """
         self.validate_add_data_parameters(candidates, "2MASS")
         return add_2mass_xmatch_to_candidates(self.kowalski, candidates, radius)
 
@@ -569,8 +830,23 @@ class RemoteDataSource(BaseDataSource):
         self.implements.add("download_files")
 
     def download_files(
-        self, data: Tuple[int, int, int, str], type="lightcurve"
+        self, data: Tuple[int, int, int, str], type: str = "lightcurve"
     ) -> List:
+        """
+        Download the files from the remote server
+
+        Parameters
+        ----------
+        data: Tuple[int, int, int, str]
+            The data to download, a list of tuples with field, ccd, quad, band
+        type: str
+            The type of data to download, either lightcurve or period
+
+        Returns
+        -------
+        List
+            A list of the downloaded files
+        """
         scp_client = SCPClient(self.ssh_client.get_transport())
 
         local_base_dir, remote_base_dir, prefix = None, None, None
@@ -642,6 +918,14 @@ class LocalDataSource(BaseDataSource):
     def download_files(
         self, data: Tuple[int, int, int, str], type="lightcurve"
     ) -> List:
+        """
+        Download the files from the local server, not implemented in this class
+
+        Raises
+        ------
+        NotImplementedError
+            LocalDataSource does not support downloading files
+        """
         raise NotImplementedError("LocalDataSource does not support downloading files")
 
 
@@ -662,8 +946,23 @@ class APIDataSource(BaseDataSource):
         self.implements.add("download_files")
 
     def download_files(
-        self, data: Tuple[int, int, int, str], type="lightcurve"
+        self, data: Tuple[int, int, int, str], type: str = "lightcurve"
     ) -> List:
+        """
+        Download the files from an API
+
+        Parameters
+        ----------
+        data: Tuple[int, int, int, str]
+            The data to download, a list of tuples with field, ccd, quad, band
+        type: str
+            The type of data to download, either lightcurve or period
+
+        Returns
+        -------
+        List
+            A list of the downloaded files
+        """
         local_base_dir, prefix = None, None
         if type == "lightcurve":
             local_base_dir, prefix, api_endpoint = (
