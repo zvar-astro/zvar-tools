@@ -880,6 +880,84 @@ class BaseDataSource:
 
         return candidates
 
+    def fpw_periodogram(
+        self,
+        lightcurve,
+        band="r",
+        nb_periods=1,
+        period_unit="hours",
+        binsize=5,
+        freq_min=None,
+        freq_max=None,
+    ):
+        """
+        Compute the periodogram using the FPW algorithm
+
+        Parameters
+        ----------
+        lightcurve: np.ndarray
+            The lightcurve data, of shape (time, flux, flux_err, band)
+        band: str
+            The band to compute the periodogram for
+        nb_periods: int
+            The number of periods to return
+        period_unit: str
+            The unit to return the period in: minutes, hours, days
+        binsize: int
+            The binsize to use
+        freq_min: float
+            The minimum frequency to consider
+        freq_max: float
+            The maximum frequency to consider
+
+        Returns
+        -------
+        Tuple
+            A tuple with the N best periods, their significances and the full periodogram
+        """
+        if band not in ALLOWED_BANDS:
+            raise ValueError(
+                f"Band {band} is not supported, must be one of {ALLOWED_BANDS}"
+            )
+        if nb_periods < 1:
+            raise ValueError("Number of periods must be greater than 0")
+        if period_unit not in ["minutes", "hours", "days"]:
+            raise ValueError("Period unit must be one of minutes, hours, days")
+
+        if period_unit == "minutes":
+            multiplier = 60
+        elif period_unit == "hours":
+            multiplier = 3600
+        elif period_unit == "days":
+            multiplier = 86400
+
+        lc = lightcurve.copy()
+        lc = lc[:, lc[3] == FILTER2IDX[band]]
+
+        # we drop the non detections
+        lc = lc[~np.isnan(lc[:, 1])]
+        # we make sure all arrays are C-contiguous, required by FPW
+        time, flux, flux_err = (np.ascontiguousarray(x) for x in lc[:3])
+
+        # we center the flux on 0 by subtracting the median
+        flux -= np.nanmedian(flux)
+
+        f_grid = freq_grid(time, fmin=freq_min, fmax=freq_max)
+
+        fpw_pgram = fpw.run_fpw(time, flux, flux_err, f_grid, binsize)
+        fpw_pgram[np.isnan(fpw_pgram)] = 0
+
+        nb_periods = min(len(fpw_pgram[fpw_pgram > 0]), nb_periods)
+
+        # return the periods and their significance, ordered by significance desc, up to nb_periods
+        periods = []
+        significances = []
+        for i in np.argsort(fpw_pgram)[::-1][:nb_periods]:
+            periods.append(1 / f_grid[i] / multiplier)
+            significances.append(fpw_pgram[i])
+
+        return periods, significances, fpw_pgram
+
 
 class RemoteDataSource(BaseDataSource):
     def __init__(
@@ -1123,81 +1201,3 @@ class APIDataSource(BaseDataSource):
             downloaded.append((field, ccd, quad, band))
 
         return downloaded
-
-    def fpw_periodogram(
-        self,
-        lightcurve,
-        band="r",
-        nb_periods=1,
-        period_unit="hours",
-        binsize=5,
-        freq_min=None,
-        freq_max=None,
-    ):
-        """
-        Compute the periodogram using the FPW algorithm
-
-        Parameters
-        ----------
-        lightcurve: np.ndarray
-            The lightcurve data, of shape (time, flux, flux_err, band)
-        band: str
-            The band to compute the periodogram for
-        nb_periods: int
-            The number of periods to return
-        period_unit: str
-            The unit to return the period in: minutes, hours, days
-        binsize: int
-            The binsize to use
-        freq_min: float
-            The minimum frequency to consider
-        freq_max: float
-            The maximum frequency to consider
-
-        Returns
-        -------
-        Tuple
-            A tuple with the N best periods, their significances and the full periodogram
-        """
-        if band not in ALLOWED_BANDS:
-            raise ValueError(
-                f"Band {band} is not supported, must be one of {ALLOWED_BANDS}"
-            )
-        if nb_periods < 1:
-            raise ValueError("Number of periods must be greater than 0")
-        if period_unit not in ["minutes", "hours", "days"]:
-            raise ValueError("Period unit must be one of minutes, hours, days")
-
-        if period_unit == "minutes":
-            multiplier = 60
-        elif period_unit == "hours":
-            multiplier = 3600
-        elif period_unit == "days":
-            multiplier = 86400
-
-        lc = lightcurve.copy()
-        lc = lc[:, lc[3] == FILTER2IDX[band]]
-
-        # we drop the non detections
-        lc = lc[~np.isnan(lc[:, 1])]
-        # we make sure all arrays are C-contiguous, required by FPW
-        time, flux, flux_err = (np.ascontiguousarray(x) for x in lc[:3])
-
-        # we center the flux on 0 by subtracting the median
-        flux -= np.nanmedian(flux)
-
-        f_grid = freq_grid(time, fmin=freq_min, fmax=freq_max)
-
-        fpw_pgram = fpw.run_fpw(time, flux, flux_err, f_grid, binsize)
-        fpw_pgram[np.isnan(fpw_pgram)] = 0
-
-        nb_periods = min(len(fpw_pgram[fpw_pgram > 0]), nb_periods)
-
-        # return the periods and their significance, ordered by significance desc, up to nb_periods
-        periods = []
-        significances = []
-        for i in np.argsort(fpw_pgram)[::-1][:nb_periods]:
-            periods.append(1 / f_grid[i] / multiplier)
-            significances.append(fpw_pgram[i])
-
-        return periods, significances, fpw_pgram
