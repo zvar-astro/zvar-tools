@@ -4,6 +4,7 @@ from typing import List, Union
 import matplotlib.pyplot as plt
 import numpy as np
 from astropy.table import Table
+from astropy.utils.data import download_file
 from matplotlib.colors import LogNorm
 
 from zvartools.candidate import VariabilityCandidate
@@ -14,6 +15,12 @@ BAND_TO_COLOR = {1: "green", 2: "red", 3: "orange"}
 BAND_IDX_TO_NAME = {1: "g", 2: "r", 3: "i"}
 BAND_NAME_TO_IDX = {"g": 1, "r": 2, "i": 3}
 MARKER_STYLES = {5: ("s", 20), 10: ("o", 20), 20: ("*", 35)}
+
+
+def get_gaia_data():
+    url = "https://github.com/zvar-astro/zvar-tools/raw/refs/heads/main/data/hrd_query_edr3_200pc.fits"
+    filename = download_file(url, cache=True)
+    return Table.read(filename).to_pandas()
 
 
 def plot_gaia_cmd(
@@ -80,11 +87,7 @@ def plot_gaia_cmd(
     bp_rp = [candidate_list[i].gaia.BP_RP for i in valid_candidates_idx]
     mg = [candidate_list[i].gaia.MG for i in valid_candidates_idx]
 
-    # Load a Gaia HR diagram
-    sample_path = os.path.join(
-        os.path.dirname(__file__), "./data/hrd_query_edr3_200pc.fits"
-    )
-    gaia_sample = Table.read(sample_path).to_pandas()
+    gaia_sample = get_gaia_data()
     gaia_bprp = (
         gaia_sample.phot_bp_mean_mag.values - gaia_sample.phot_rp_mean_mag.values
     )
