@@ -1,7 +1,7 @@
-import os
 from typing import Union
 
 import numpy as np
+from astropy.utils.data import download_file
 from numba import njit
 
 CCD_LAYOUT_X = [
@@ -168,9 +168,11 @@ class ZTFFieldData:
         if self.fieldno is not None:
             return self.fieldno, self.ra_all, self.dec_all
 
-        field_path = os.path.join(os.path.dirname(__file__), "./data/ZTF_Fields.txt")
+        url = "https://github.com/zvar-astro/zvar-tools/raw/refs/heads/main/data/ZTF_Fields.txt"
+        filename = download_file(url, cache=True)
+
         _fieldno, _ra_all, _dec_all = np.loadtxt(
-            field_path, unpack=True, usecols=(0, 1, 2), dtype="int,float,float"
+            filename, unpack=True, usecols=(0, 1, 2), dtype="int,float,float"
         )
         return _fieldno, _ra_all * DEGRA, _dec_all * DEGRA
 
