@@ -311,6 +311,8 @@ class VariabilityCandidate:
         if isinstance(galex, GalexMatch):
             self.galex = galex
         elif isinstance(galex, dict):
+            if "name" in galex:
+                galex["id"] = galex.pop("name")
             self.galex = GalexMatch(**galex)
         elif galex is None:
             self.galex = None
@@ -687,10 +689,10 @@ def add_galex_xmatch_to_candidates(
     # Fill in the Galex data for each candidate
     for candidate in candidate_list:
         result = xmatches.get(candidate.psid)
-        if result and result.get("id"):  # If Galex found anything
+        if result and result.get("name"):  # If Galex found anything
             candidate.set_galex(
                 GalexMatch(
-                    result.get("id"),
+                    result.get("name"),
                     result.get("FUVmag"),
                     result.get("e_FUVmag"),
                     result.get("NUVmag"),
@@ -788,6 +790,13 @@ def export_to_parquet(
                     for key in vars(candidate.allwise)
                 }
             )
+        if candidate.galex:
+            candidate_data.update(
+                {
+                    f"galex_{key}": getattr(candidate.galex, key)
+                    for key in vars(candidate.galex)
+                }
+            )
         data.append(candidate_data)
     # Construct the candidate path
     candidate_path = os.path.join(
@@ -872,6 +881,16 @@ def import_from_parquet(path: str, best_m_only=True) -> List[VariabilityCandidat
             else None
         )
 
+        galex_data = (
+            {
+                key.replace("galex_", ""): row[key]
+                for key in row.keys()
+                if key.startswith("galex_")
+            }
+            if row.get("galex_id")
+            else None
+        )
+
         if not best_m_only:
             candidate = VariabilityCandidate(
                 psid=row["psid"],
@@ -891,6 +910,7 @@ def import_from_parquet(path: str, best_m_only=True) -> List[VariabilityCandidat
                 gaia=gaia_data,
                 twomass=twomass_data,
                 allwise=allwise_data,
+                galex=galex_data,
             )
         else:
             bin_idx = 0
