@@ -10,6 +10,7 @@ from zvartools.external import (
     query_ps1,
     query_2mass,
     query_allwise,
+    query_galex,
 )
 from zvartools.stats import get_cdf, get_extrema
 from zvartools.enums import BIN_IDX_TO_FREQ_COL, BIN_IDX_TO_FAP_COL
@@ -124,6 +125,22 @@ class AllWISEMatch:
         return self.__repr__()
 
 
+class GalexMatch:
+    def __init__(self, id, fuv, fuv_err, nuv, nuv_err, b):
+        self.id = id
+        self.fuv = fuv
+        self.fuv_err = fuv_err
+        self.nuv = nuv
+        self.nuv_err = nuv_err
+        self.b = b
+
+    def __repr__(self):
+        return f"FUV: {self.fuv:.2f}±{self.fuv_err:.2f}, NUV: {self.nuv:.2f}±{self.nuv_err:.2f}, b: {self.b}"
+
+    def __str__(self):
+        return self.__repr__()
+
+
 class VariabilityCandidate:
     def __init__(
         self,
@@ -142,6 +159,7 @@ class VariabilityCandidate:
         gaia: Union[GaiaMatch, dict] = None,
         twomass: Union[TwoMASSMatch, dict] = None,
         allwise: Union[AllWISEMatch, dict] = None,
+        galex: Union[GalexMatch, dict] = None,
     ):
         self.psid = psid
         self.ra = ra
@@ -158,6 +176,7 @@ class VariabilityCandidate:
         self.set_gaia(gaia)
         self.set_2mass(twomass)
         self.set_allwise(allwise)
+        self.set_galex(galex)
 
     @property
     def period(self):
@@ -272,6 +291,34 @@ class VariabilityCandidate:
         else:
             raise ValueError("AllWISE must be a AllWISEMatch, a dictionary, or None")
 
+    def set_galex(
+        self,
+        galex: Union[GalexMatch, dict, None],
+    ):
+        """
+        Set the Galex data for the candidate
+
+        Parameters
+        ----------
+        galex : Union[GalexMatch, dict, None]
+            Galex data
+
+        Raises
+        ------
+        ValueError
+            If the Galex data is not of the correct type
+        """
+        if isinstance(galex, GalexMatch):
+            self.galex = galex
+        elif isinstance(galex, dict):
+            if "name" in galex:
+                galex["id"] = galex.pop("name")
+            self.galex = GalexMatch(**galex)
+        elif galex is None:
+            self.galex = None
+        else:
+            raise ValueError("Galex must be a GalexMatch, a dictionary, or None")
+
     def __repr__(self):
         return (
             f"ID: {self.psid}, RA: {self.ra}, Dec: {self.dec}, Valid: {self.valid}, Best M: {self.best_M}, freq: {self.freq}, FAP: {self.fap}"
@@ -284,6 +331,7 @@ class VariabilityCandidate:
             + (f"\n    Gaia: {self.gaia}" if self.gaia else "")
             + (f"\n    2MASS: {self.twomass}" if self.twomass else "")
             + (f"\n    AllWISE: {self.allwise}" if self.allwise else "")
+            + (f"\n    Galex: {self.galex}" if self.galex else "")
         )
 
 
@@ -601,6 +649,61 @@ def add_allwise_xmatch_to_candidates(
     return candidate_list
 
 
+def add_galex_xmatch_to_candidates(
+    k: Kowalski, candidate_list: List[VariabilityCandidate], radius: float = 2.0
+) -> List[VariabilityCandidate]:
+    """
+    Add Galex crossmatches to the candidates
+
+    Parameters
+    ----------
+    k : Kowalski
+        Kowalski instance
+    candidate_list : List[VariabilityCandidate]
+        List of variability candidates
+    radius : float
+        Radius in arcseconds to search for xmatches in external catalogs
+
+    Returns
+    -------
+    List[VariabilityCandidate]
+        List of variability candidates with Galex crossmatches
+    """
+    if not isinstance(candidate_list, list):
+        raise ValueError("Candidates must be provided as a list")
+    if not all(
+        isinstance(candidate, VariabilityCandidate) for candidate in candidate_list
+    ):
+        raise ValueError("Candidates must be of type Candidate")
+
+    # Extract the psids, ras, and decs from the candidate list
+    psids = [candidate.psid for candidate in candidate_list]
+    ras = [candidate.ra for candidate in candidate_list]
+    decs = [candidate.dec for candidate in candidate_list]
+
+    xmatches = query_galex(k, psids, ras, decs, radius)
+    # print how many sources have galex matches
+    print(
+        f"Found {len([x for x in xmatches.values() if x is not None])} Galex matches, out of {len(candidate_list)} sources"
+    )
+    # Fill in the Galex data for each candidate
+    for candidate in candidate_list:
+        result = xmatches.get(candidate.psid)
+        if result and result.get("name"):  # If Galex found anything
+            candidate.set_galex(
+                GalexMatch(
+                    result.get("name"),
+                    result.get("FUVmag"),
+                    result.get("e_FUVmag"),
+                    result.get("NUVmag"),
+                    result.get("e_NUVmag"),
+                    result.get("b"),
+                )
+            )
+
+    return candidate_list
+
+
 def export_to_parquet(
     candidate_list: List[VariabilityCandidate], field: int, band: int, path: str
 ):
@@ -687,6 +790,13 @@ def export_to_parquet(
                     for key in vars(candidate.allwise)
                 }
             )
+        if candidate.galex:
+            candidate_data.update(
+                {
+                    f"galex_{key}": getattr(candidate.galex, key)
+                    for key in vars(candidate.galex)
+                }
+            )
         data.append(candidate_data)
     # Construct the candidate path
     candidate_path = os.path.join(
@@ -771,6 +881,16 @@ def import_from_parquet(path: str, best_m_only=True) -> List[VariabilityCandidat
             else None
         )
 
+        galex_data = (
+            {
+                key.replace("galex_", ""): row[key]
+                for key in row.keys()
+                if key.startswith("galex_")
+            }
+            if row.get("galex_id")
+            else None
+        )
+
         if not best_m_only:
             candidate = VariabilityCandidate(
                 psid=row["psid"],
@@ -790,6 +910,7 @@ def import_from_parquet(path: str, best_m_only=True) -> List[VariabilityCandidat
                 gaia=gaia_data,
                 twomass=twomass_data,
                 allwise=allwise_data,
+                galex=galex_data,
             )
         else:
             bin_idx = 0
