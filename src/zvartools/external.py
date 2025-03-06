@@ -601,6 +601,8 @@ def query_galex(
             "dec": 1,
             "name": 1,
             "b": 1,
+            "FUVmag": 1,
+            "e_FUVmag": 1,
             "NUVmag": 1,
             "e_NUVmag": 1,
         },

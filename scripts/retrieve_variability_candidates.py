@@ -7,6 +7,7 @@ from zvartools.candidate import (
     add_ps1_xmatch_to_candidates,
     add_2mass_xmatch_to_candidates,
     add_allwise_xmatch_to_candidates,
+    add_galex_xmatch_to_candidates,
 )
 from zvartools.external import connect_to_kowalski
 from zvartools.parsers import candidates_parser, validate_candidates_args
@@ -62,6 +63,10 @@ if __name__ == "__main__":
             candidate_list = add_allwise_xmatch_to_candidates(
                 k, candidate_list, radius
             )  # Fill in the AllWISE data
+            print("Adding GALEX xmatch to candidates")
+            candidate_list = add_galex_xmatch_to_candidates(
+                k, candidate_list, radius
+            )  # Fill in the GALEX data
             print("Exporting candidates to CSV")
             export_to_parquet(
                 candidate_list, field, band, output_path
