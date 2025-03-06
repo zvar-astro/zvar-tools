@@ -25,7 +25,7 @@ candidate = VariabilityCandidate(
 
 def test_gaia_xmatch():
     xmatch_per_candidate = query_gaia(
-        k, [candidate.id], [candidate.ra], [candidate.dec], 5.0
+        k, [candidate.psid], [candidate.ra], [candidate.dec], 5.0
     )
     assert 149053599892210341 in xmatch_per_candidate
 
@@ -56,12 +56,12 @@ def test_gaia_xmatch():
 
 
 def test_ps1_xmatch():
-    xmatch_per_candidate = query_ps1(k, [candidate.id])
+    xmatch_per_candidate = query_ps1(k, [candidate.psid])
     assert 149053599892210341 in xmatch_per_candidate
 
     xmatch = xmatch_per_candidate[149053599892210341]
 
-    assert xmatch["id"] == 149053599892210341 == candidate.id
+    assert xmatch["id"] == 149053599892210341 == candidate.psid
     assert xmatch["gMeanPSFMag"] == 17.488899
     assert xmatch["gMeanPSFMagErr"] == 0.0063439999
     assert xmatch["rMeanPSFMag"] == 16.256399
@@ -76,7 +76,7 @@ def test_ps1_xmatch():
 
 def test_2mass_xmatch():
     xmatch_per_candidate = query_2mass(
-        k, [candidate.id], [candidate.ra], [candidate.dec], 5.0
+        k, [candidate.psid], [candidate.ra], [candidate.dec], 5.0
     )
     assert 149053599892210341 in xmatch_per_candidate
 
@@ -94,7 +94,7 @@ def test_2mass_xmatch():
 
 def test_allwise_xmatch():
     xmatch_per_candidate = query_allwise(
-        k, [candidate.id], [candidate.ra], [candidate.dec], 5.0
+        k, [candidate.psid], [candidate.ra], [candidate.dec], 5.0
     )
     assert 149053599892210341 in xmatch_per_candidate
 
@@ -115,7 +115,7 @@ def test_allwise_xmatch():
 
 def test_galex_xmatch():
     xmatch_per_candidate = query_galex(
-        k, [candidate.id], [candidate.ra], [candidate.dec], 5.0
+        k, [candidate.psid], [candidate.ra], [candidate.dec], 5.0
     )
     assert 149053599892210341 in xmatch_per_candidate
 
