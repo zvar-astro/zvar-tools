@@ -7,8 +7,8 @@ import shutil
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import threading
 
-def look_for_files(field, ccd, quad):
-    pattern = f'/data/zvar/matchfiles/{field:04d}/data_{field:04d}_{ccd:02d}_{quad:01d}_*.h5'
+def look_for_files(input_path, field, ccd, quad):
+    pattern = f'{input_path}/{field:04d}/data_{field:04d}_{ccd:02d}_{quad:01d}_*.h5'
     files = glob.glob(pattern)
     return files
 
@@ -18,20 +18,20 @@ def copy_h5_file(src, dst):
     """
     shutil.copy2(src, dst)
 
-def copy_g(field, ccd, quad):
-    g_filename = f'/data/zvar/matchfiles/{field:04d}/data_{field:04d}_{ccd:02d}_{quad:01d}_zg.h5'
-    output_filename = f'/data/zvar/comb_matchfiles/{field:04d}/comb_data_{field:04d}_{ccd:02d}_{quad:01d}.h5'
+def copy_g(input_path, output_path, field, ccd, quad):
+    g_filename = f'{input_path}/{field:04d}/data_{field:04d}_{ccd:02d}_{quad:01d}_zg.h5'
+    output_filename = f'{output_path}/{field:04d}/comb_data_{field:04d}_{ccd:02d}_{quad:01d}.h5'
     copy_h5_file(g_filename, output_filename)
 
-def copy_r(field, ccd, quad):
-    r_filename = f'/data/zvar/matchfiles/{field:04d}/data_{field:04d}_{ccd:02d}_{quad:01d}_zr.h5'
-    output_filename = f'/data/zvar/comb_matchfiles/{field:04d}/comb_data_{field:04d}_{ccd:02d}_{quad:01d}.h5'
+def copy_r(input_path, output_path, field, ccd, quad):
+    r_filename = f'{input_path}/{field:04d}/data_{field:04d}_{ccd:02d}_{quad:01d}_zr.h5'
+    output_filename = f'{output_path}/{field:04d}/comb_data_{field:04d}_{ccd:02d}_{quad:01d}.h5'
     copy_h5_file(r_filename, output_filename)
 
-def merge_g_r(field, ccd, quad):
-    g_filename = f'/data/zvar/matchfiles/{field:04d}/data_{field:04d}_{ccd:02d}_{quad:01d}_zg.h5'
-    r_filename = f'/data/zvar/matchfiles/{field:04d}/data_{field:04d}_{ccd:02d}_{quad:01d}_zr.h5'
-    output_filename = f'/data/zvar/comb_matchfiles/{field:04d}/comb_data_{field:04d}_{ccd:02d}_{quad:01d}.h5'
+def merge_g_r(input_path, output_path, field, ccd, quad):
+    g_filename = f'{input_path}/{field:04d}/data_{field:04d}_{ccd:02d}_{quad:01d}_zg.h5'
+    r_filename = f'{input_path}/{field:04d}/data_{field:04d}_{ccd:02d}_{quad:01d}_zr.h5'
+    output_filename = f'{output_path}/{field:04d}/comb_data_{field:04d}_{ccd:02d}_{quad:01d}.h5'
 
     #Load relevant data from each file
     with h5py.File(g_filename, "r") as f:
@@ -281,12 +281,11 @@ def merge_g_r(field, ccd, quad):
         data_group.create_dataset("exposures", data=exposures_table, compression="gzip", compression_opts=1)
         data_group.create_dataset("sourcedata", data=sourcedata_table, compression="gzip", compression_opts=1)
 
-def merge_g_r_i(field, ccd, quad):
-    g_filename = f'/data/zvar/matchfiles/{field:04d}/data_{field:04d}_{ccd:02d}_{quad:01d}_zg.h5'
-    r_filename = f'/data/zvar/matchfiles/{field:04d}/data_{field:04d}_{ccd:02d}_{quad:01d}_zr.h5'
-    i_filename = f'/data/zvar/matchfiles/{field:04d}/data_{field:04d}_{ccd:02d}_{quad:01d}_zi.h5'
-    output_filename = f'/data/zvar/comb_matchfiles/{field:04d}/comb_data_{field:04d}_{ccd:02d}_{quad:01d}.h5'
-
+def merge_g_r_i(input_path, output_path, field, ccd, quad):
+    g_filename = f'{input_path}/{field:04d}/data_{field:04d}_{ccd:02d}_{quad:01d}_zg.h5'
+    r_filename = f'{input_path}/{field:04d}/data_{field:04d}_{ccd:02d}_{quad:01d}_zr.h5'
+    i_filename = f'{input_path}/{field:04d}/data_{field:04d}_{ccd:02d}_{quad:01d}_zi.h5'
+    output_filename = f'{output_path}/{field:04d}/comb_data_{field:04d}_{ccd:02d}_{quad:01d}.h5'
     #Load relevant data from each file
     with h5py.File(g_filename, "r") as f:
         g_jd = f["/data/exposures"]["jd"][:]
@@ -586,9 +585,8 @@ def merge_g_r_i(field, ccd, quad):
         data_group.create_dataset("exposures", data=exposures_table, compression="gzip", compression_opts=1)
         data_group.create_dataset("sourcedata", data=sourcedata_table, compression="gzip", compression_opts=1)
 
-
-def which_function(field, ccd, quad):
-    files = look_for_files(field, ccd, quad)
+def which_function(input_path, field, ccd, quad):
+    files = look_for_files(input_path, field, ccd, quad)
     has_g = any('_zg.h5' in f for f in files)
     has_r = any('_zr.h5' in f for f in files)
     has_i = any('_zi.h5' in f for f in files)
@@ -604,16 +602,16 @@ def which_function(field, ccd, quad):
     else:
         return None
 
-def process_file(field, ccd, quad):
+def process_file(input_path, output_path, field, ccd, quad):
     print(f"Processing field {field}, ccd {ccd}, quad {quad} on thread {threading.get_ident()}")
-    func = which_function(field, ccd, quad)
+    func = which_function(input_path, field, ccd, quad)
     if func:
-        func(field, ccd, quad)
+        func(input_path, output_path, field, ccd, quad)
         print(f"Completed processing for field {field}, ccd {ccd}, quad {quad}.")
     else:
         print(f"No g or r files found for field {field}, ccd {ccd}, quad {quad}. Skipping.")
 
-def process_field(field):
+def process_field(input_path, output_path, field):
     if field < 245 or field > 881:
         print("Field number must be between 245 and 881.")
         return
@@ -622,33 +620,66 @@ def process_field(field):
 
     for ccd in ccds:
         for quad in quads:
-            process_file(field, ccd, quad)
+            process_file(input_path, output_path, field, ccd, quad)
 
-def process_all_fields(n_threads=4):
+def process_all_fields(input_path, output_path, n_threads=4):
+    """
+    Process all fields in parallel. Note: accepts input_path and output_path
+    so args can be passed consistently from the CLI.
+    """
     fields = np.arange(245, 882)
     with ProcessPoolExecutor(max_workers=n_threads) as executor:
-        futures = [executor.submit(process_field, field) for field in fields]
+        futures = [executor.submit(process_field, input_path, output_path, field) for field in fields]
         for future in as_completed(futures):
             future.result()
 
+def process_subset_fields(input_path, output_path, lower_field, upper_field, n_threads=4):
+    """
+    Process a subset of fields in parallel. Note: accepts input_path and output_path
+    so args can be passed consistently from the CLI.
+    """
+    fields = np.arange(lower_field, upper_field + 1)
+    with ProcessPoolExecutor(max_workers=n_threads) as executor:
+        futures = [executor.submit(process_field, input_path, output_path, field) for field in fields]
+        for future in as_completed(futures):
+            future.result()
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Merge or copy ZTF matchfiles.")
+
+    parent_parser = argparse.ArgumentParser(add_help=False)
+    parent_parser.add_argument("--input_path", type=str, default="/data/zvar/matchfiles/",
+                               help="Input path for matchfiles")
+    parent_parser.add_argument("--output_path", type=str, default="/data/zvar/comb_matchfiles/",
+                               help="Output path for combined matchfiles")
+
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    # process_field command
-    parser_field = subparsers.add_parser("process_field", help="Process a single field")
+    parser_field = subparsers.add_parser("process_field", parents=[parent_parser],
+                                         help="Process a single field")
     parser_field.add_argument("field", type=int, help="Field number")
 
-    # process_all_fields command
-    parser_all = subparsers.add_parser("process_all_fields", help="Process all fields")
-    parser_all.add_argument("--n_threads", type=int, default=4, help="Number of threads (default: 4)")
+    parser_all = subparsers.add_parser("process_all_fields", parents=[parent_parser],
+                                       help="Process all fields")
+    parser_all.add_argument("--n_threads", type=int, default=4,
+                            help="Number of threads (default: 4)")
+
+    parser_subset = subparsers.add_parser("process_subset_fields", parents=[parent_parser],
+                                          help="Process fields in an inclusive range")
+    parser_subset.add_argument("lower_field", type=int, help="Lower field number (inclusive)")
+    parser_subset.add_argument("upper_field", type=int, help="Upper field number (inclusive)")
+    parser_subset.add_argument("--n_threads", type=int, default=4,
+                               help="Number of threads (default: 4)")
 
     args = parser.parse_args()
-
     if args.command == "process_field":
-        process_field(args.field)
+        process_field(args.input_path, args.output_path, args.field)
     elif args.command == "process_all_fields":
-        process_all_fields(args.n_threads)
+        process_all_fields(args.input_path, args.output_path, args.n_threads)
+    elif args.command == "process_subset_fields":
+        process_subset_fields(args.input_path, args.output_path,
+                              args.lower_field, args.upper_field, args.n_threads)
     else:
         parser.print_help()
         sys.exit(1)
