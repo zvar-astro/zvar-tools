@@ -491,9 +491,13 @@ def merge_g_r_i(input_path, output_path, field, ccd, quad):
     comb_mag_err_ref = np.zeros(len(unique_ids), dtype=g_mag_err_ref.dtype)
     comb_objtype = np.zeros(len(unique_ids), dtype=g_objtype.dtype)
 
-    comb_flux = np.zeros((len(unique_ids), len(g_bjd) + len(r_bjd) + len(i_bjd)), dtype=g_flux.dtype)
-    comb_fluxerr = np.zeros((len(unique_ids), len(g_bjd) + len(r_bjd) + len(i_bjd)), dtype=g_fluxerr.dtype)
-    comb_flag = np.zeros((len(unique_ids), len(g_bjd) + len(r_bjd) + len(i_bjd)), dtype=g_flag.dtype)
+    g_nexp = len(g_bjd)
+    r_nexp = len(r_bjd)
+    i_nexp = len(i_bjd)
+
+    comb_flux = np.zeros((len(unique_ids), g_nexp + r_nexp + i_nexp), dtype=g_flux.dtype)
+    comb_fluxerr = np.zeros((len(unique_ids), g_nexp + r_nexp + i_nexp), dtype=g_fluxerr.dtype)
+    comb_flag = np.zeros((len(unique_ids), g_nexp + r_nexp + i_nexp), dtype=g_flag.dtype)
 
     total = len(unique_ids)
     progress_interval = max(1, total // 10)  # log 10 times across the run
@@ -663,11 +667,13 @@ def which_function(input_path, field, ccd, quad):
     files = look_for_files(input_path, field, ccd, quad)
     has_g = any('_zg.h5' in f for f in files)
     has_r = any('_zr.h5' in f for f in files)
-    has_i = any('_zi.h5' in f for f in files)
+    # has_i = any('_zi.h5' in f for f in files)
 
-    if has_g and has_r and has_i:
-        return merge_g_r_i
-    elif has_g and has_r:
+    # if has_g and has_r and has_i:
+    #     return merge_g_r_i
+    # elif has_g and has_r:
+    #     return merge_g_r
+    if has_g and has_r:
         return merge_g_r
     elif has_g:
         return copy_g
@@ -689,16 +695,38 @@ def process_file(input_path, output_path, field, ccd, quad):
     else:
         print(f"No g or r files found for field {field}, ccd {ccd}, quad {quad}. Skipping.")
 
-def process_field(input_path, output_path, field):
+def process_field(input_path, output_path, field, n_threads=4):
+    """
+    Process all CCDs and quads for a single field in parallel using a spawn context.
+    """
     if field < 245 or field > 881:
         print("Field number must be between 245 and 881.")
         return
-    ccds = range(1, 17)      # CCDs 1 to 16
-    quads = range(1, 5)      # Quads 1 to 4
 
-    for ccd in ccds:
-        for quad in quads:
-            process_file(input_path, output_path, field, ccd, quad)
+    ccds = range(1, 17)  # CCDs 1 to 16
+    quads = range(1, 5)  # Quads 1 to 4
+
+    ctx = multiprocessing.get_context("spawn")
+    with ProcessPoolExecutor(max_workers=n_threads, mp_context=ctx) as executor:
+        futures = []
+        for ccd in ccds:
+            for quad in quads:
+                futures.append(executor.submit(process_file, input_path, output_path, field, ccd, quad))
+
+        try:
+            for future in as_completed(futures):
+                # Re-raise exceptions from workers
+                future.result()
+        except KeyboardInterrupt:
+            print("KeyboardInterrupt received — cancelling remaining tasks and shutting down workers...", file=sys.stderr)
+            # Try to cancel pending futures
+            for f in futures:
+                try:
+                    f.cancel()
+                except Exception:
+                    pass
+            executor.shutdown(wait=False)
+            raise
 
 def process_all_fields(input_path, output_path, n_threads=4):
     """
@@ -808,6 +836,8 @@ if __name__ == "__main__":
     parser_field = subparsers.add_parser("process_field", parents=[parent_parser],
                                          help="Process a single field")
     parser_field.add_argument("field", type=int, help="Field number")
+    parser_field.add_argument("--n_threads", type=int, default=4,
+                          help="Number of worker processes (default: 4)")
 
     parser_all = subparsers.add_parser("process_all_fields", parents=[parent_parser],
                                        help="Process all fields")
@@ -826,7 +856,8 @@ if __name__ == "__main__":
     # wrap top-level calls so Ctrl+C is handled more predictably
     try:
         if args.command == "process_field":
-            process_field(args.input_path, args.output_path, args.field)
+            n = clamp_n_threads(args.n_threads)
+            process_field(args.input_path, args.output_path, args.field, n)
         elif args.command == "process_all_fields":
             n = clamp_n_threads(args.n_threads)
             process_all_fields(args.input_path, args.output_path, n)
