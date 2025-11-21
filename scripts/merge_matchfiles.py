@@ -59,80 +59,98 @@ def copy_r(input_path, output_path, field, ccd, quad):
 
 def merge_g_r(input_path, output_path, field, ccd, quad):
     import h5py  # lazy import
+    import gc
     LOG.info("merge_g_r start field=%d ccd=%d quad=%d", field, ccd, quad)
     g_filename = f'{input_path}/{field:04d}/data_{field:04d}_{ccd:02d}_{quad:01d}_zg.h5'
     r_filename = f'{input_path}/{field:04d}/data_{field:04d}_{ccd:02d}_{quad:01d}_zr.h5'
     output_filename = f'{output_path}/{field:04d}/comb_data_{field:04d}_{ccd:02d}_{quad:01d}.h5'
+
+    if not os.path.exists(g_filename):
+        raise FileNotFoundError(f"g file not found: {g_filename}")
+    if not os.path.exists(r_filename):
+        raise FileNotFoundError(f"r file not found: {r_filename}")
+
     ensure_output_dir(output_path, field)
 
     # Load relevant data from each file
-    LOG.debug("Opening g file: %s", g_filename)
-    with h5py.File(g_filename, "r") as f:
-        g_jd = f["/data/exposures"]["jd"][:]
-        g_bjd = f["/data/exposures"]["bjd"][:]
-        g_filterid = f["/data/exposures"]["filterid"][:]
-        g_exptime = f["/data/exposures"]["exptime"][:]
-        g_pid = f["/data/exposures"]["pid"][:]
-        g_field = f["/data/exposures"]["field"][:]
-        g_ccd = f["/data/exposures"]["ccd"][:]
-        g_quad = f["/data/exposures"]["quad"][:]
-        g_imstat = f["/data/exposures"]["imstat"][:]
-        g_infobits = f["/data/exposures"]["infobits"][:]
-        g_seeing = f["/data/exposures"]["seeing"][:]
-        g_mzpsci = f["/data/exposures"]["mzpsci"][:]
-        g_mzpsciunc = f["/data/exposures"]["mzpsciunc"][:]
-        g_mzpscirms = f["/data/exposures"]["mzpscirms"][:]
-        g_clrco = f["/data/exposures"]["clrco"][:]
-        g_clrcounc = f["/data/exposures"]["clrcounc"][:]
-        g_maglim = f["/data/exposures"]["maglim"][:]
-        g_airmass = f["/data/exposures"]["airmass"][:]
-        g_nps1matches = f["/data/exposures"]["nps1matches"][:]
+    try:
+        LOG.debug("Opening g file: %s", g_filename)
+        with h5py.File(g_filename, "r") as f:
+            g_jd = f["/data/exposures"]["jd"][:]
+            g_bjd = f["/data/exposures"]["bjd"][:]
+            g_filterid = f["/data/exposures"]["filterid"][:]
+            g_exptime = f["/data/exposures"]["exptime"][:]
+            g_pid = f["/data/exposures"]["pid"][:]
+            g_field = f["/data/exposures"]["field"][:]
+            g_ccd = f["/data/exposures"]["ccd"][:]
+            g_quad = f["/data/exposures"]["quad"][:]
+            g_imstat = f["/data/exposures"]["imstat"][:]
+            g_infobits = f["/data/exposures"]["infobits"][:]
+            g_seeing = f["/data/exposures"]["seeing"][:]
+            g_mzpsci = f["/data/exposures"]["mzpsci"][:]
+            g_mzpsciunc = f["/data/exposures"]["mzpsciunc"][:]
+            g_mzpscirms = f["/data/exposures"]["mzpscirms"][:]
+            g_clrco = f["/data/exposures"]["clrco"][:]
+            g_clrcounc = f["/data/exposures"]["clrcounc"][:]
+            g_maglim = f["/data/exposures"]["maglim"][:]
+            g_airmass = f["/data/exposures"]["airmass"][:]
+            g_nps1matches = f["/data/exposures"]["nps1matches"][:]
 
-        g_psid = f["/data/sources"]["gaia_id"][:]
-        g_ra = f["/data/sources"]["ra"][:]
-        g_dec = f["/data/sources"]["decl"][:]
-        g_mag_ref = f["/data/sources"]["mag_ref"][:]
-        g_mag_err_ref = f["/data/sources"]["mag_err_ref"][:]
-        g_objtype = f["/data/sources"]["objtype"][:]
+            g_psid = f["/data/sources"]["gaia_id"][:]
+            g_ra = f["/data/sources"]["ra"][:]
+            g_dec = f["/data/sources"]["decl"][:]
+            g_mag_ref = f["/data/sources"]["mag_ref"][:]
+            g_mag_err_ref = f["/data/sources"]["mag_err_ref"][:]
+            g_objtype = f["/data/sources"]["objtype"][:]
 
-        g_flux = f["/data/sourcedata"]["flux"][:]
-        g_fluxerr = f["/data/sourcedata"]["flux_err"][:]
-        g_flag = f["/data/sourcedata"]["flag"][:]
-    LOG.debug("Read g: %d sources, %d exposures", len(g_psid), len(g_bjd))
+            g_flux = f["/data/sourcedata"]["flux"][:]
+            g_fluxerr = f["/data/sourcedata"]["flux_err"][:]
+            g_flag = f["/data/sourcedata"]["flag"][:]
+        LOG.debug("Read g: %d sources, %d exposures", len(g_psid), len(g_bjd))
+        gc.collect()
 
-    LOG.debug("Opening r file: %s", r_filename)
-    with h5py.File(r_filename, "r") as f:
-        r_jd = f["/data/exposures"]["jd"][:]
-        r_bjd = f["/data/exposures"]["bjd"][:]
-        r_filterid = f["/data/exposures"]["filterid"][:]
-        r_exptime = f["/data/exposures"]["exptime"][:]
-        r_pid = f["/data/exposures"]["pid"][:]
-        r_field = f["/data/exposures"]["field"][:]
-        r_ccd = f["/data/exposures"]["ccd"][:]
-        r_quad = f["/data/exposures"]["quad"][:]
-        r_imstat = f["/data/exposures"]["imstat"][:]
-        r_infobits = f["/data/exposures"]["infobits"][:]
-        r_seeing = f["/data/exposures"]["seeing"][:]
-        r_mzpsci = f["/data/exposures"]["mzpsci"][:]
-        r_mzpsciunc = f["/data/exposures"]["mzpsciunc"][:]
-        r_mzpscirms = f["/data/exposures"]["mzpscirms"][:]
-        r_clrco = f["/data/exposures"]["clrco"][:]
-        r_clrcounc = f["/data/exposures"]["clrcounc"][:]
-        r_maglim = f["/data/exposures"]["maglim"][:]
-        r_airmass = f["/data/exposures"]["airmass"][:]
-        r_nps1matches = f["/data/exposures"]["nps1matches"][:]
+        LOG.debug("Opening r file: %s", r_filename)
+        with h5py.File(r_filename, "r") as f:
+            r_jd = f["/data/exposures"]["jd"][:]
+            r_bjd = f["/data/exposures"]["bjd"][:]
+            r_filterid = f["/data/exposures"]["filterid"][:]
+            r_exptime = f["/data/exposures"]["exptime"][:]
+            r_pid = f["/data/exposures"]["pid"][:]
+            r_field = f["/data/exposures"]["field"][:]
+            r_ccd = f["/data/exposures"]["ccd"][:]
+            r_quad = f["/data/exposures"]["quad"][:]
+            r_imstat = f["/data/exposures"]["imstat"][:]
+            r_infobits = f["/data/exposures"]["infobits"][:]
+            r_seeing = f["/data/exposures"]["seeing"][:]
+            r_mzpsci = f["/data/exposures"]["mzpsci"][:]
+            r_mzpsciunc = f["/data/exposures"]["mzpsciunc"][:]
+            r_mzpscirms = f["/data/exposures"]["mzpscirms"][:]
+            r_clrco = f["/data/exposures"]["clrco"][:]
+            r_clrcounc = f["/data/exposures"]["clrcounc"][:]
+            r_maglim = f["/data/exposures"]["maglim"][:]
+            r_airmass = f["/data/exposures"]["airmass"][:]
+            r_nps1matches = f["/data/exposures"]["nps1matches"][:]
 
-        r_psid = f["/data/sources"]["gaia_id"][:]
-        r_ra = f["/data/sources"]["ra"][:]
-        r_dec = f["/data/sources"]["decl"][:]
-        r_mag_ref = f["/data/sources"]["mag_ref"][:]
-        r_mag_err_ref = f["/data/sources"]["mag_err_ref"][:]
-        r_objtype = f["/data/sources"]["objtype"][:]
+            r_psid = f["/data/sources"]["gaia_id"][:]
+            r_ra = f["/data/sources"]["ra"][:]
+            r_dec = f["/data/sources"]["decl"][:]
+            r_mag_ref = f["/data/sources"]["mag_ref"][:]
+            r_mag_err_ref = f["/data/sources"]["mag_err_ref"][:]
+            r_objtype = f["/data/sources"]["objtype"][:]
 
-        r_flux = f["/data/sourcedata"]["flux"][:]
-        r_fluxerr = f["/data/sourcedata"]["flux_err"][:]
-        r_flag = f["/data/sourcedata"]["flag"][:]
-    LOG.debug("Read r: %d sources, %d exposures", len(r_psid), len(r_bjd))
+            r_flux = f["/data/sourcedata"]["flux"][:]
+            r_fluxerr = f["/data/sourcedata"]["flux_err"][:]
+            r_flag = f["/data/sourcedata"]["flag"][:]
+        LOG.debug("Read r: %d sources, %d exposures", len(r_psid), len(r_bjd))
+        gc.collect()
+
+    except Exception as e:
+        LOG.error(f"Error in merge_g_r for field={field} ccd={ccd} quad={quad}: {e}", exc_info=True)
+        raise  # Re-raise so process_file can handle it
+
+    finally:
+        # Explicit cleanup
+        gc.collect()
 
     # Find unique gaia_ids (psids)
     # Build quick lookup maps from gaia_id->index to avoid np.where inside loop
@@ -143,6 +161,10 @@ def merge_g_r(input_path, output_path, field, ccd, quad):
 
     keys = sorted(g_map.keys() | r_map.keys())
     unique_ids = np.array(keys, dtype=g_psid.dtype)
+
+    del g_psid, r_psid, keys
+    gc.collect()
+
     LOG.info("Total unique sources to combine: %d", len(unique_ids))
 
     # Combine exposures metadata
@@ -166,6 +188,9 @@ def merge_g_r(input_path, output_path, field, ccd, quad):
     comb_airmass = np.concatenate((g_airmass, r_airmass))
     comb_nps1matches = np.concatenate((g_nps1matches, r_nps1matches))
 
+    g_nexp = len(g_bjd)
+    r_nexp = len(r_bjd)
+
     # Prepare output arrays
     comb_ra = np.zeros(len(unique_ids), dtype=g_ra.dtype)
     comb_dec = np.zeros(len(unique_ids), dtype=g_dec.dtype)
@@ -173,12 +198,19 @@ def merge_g_r(input_path, output_path, field, ccd, quad):
     comb_mag_err_ref = np.zeros(len(unique_ids), dtype=g_mag_err_ref.dtype)
     comb_objtype = np.zeros(len(unique_ids), dtype=g_objtype.dtype)
 
-    g_nexp = len(g_bjd)
-    r_nexp = len(r_bjd)
-
     comb_flux = np.zeros((len(unique_ids), g_nexp + r_nexp), dtype=g_flux.dtype)
     comb_fluxerr = np.zeros((len(unique_ids), g_nexp + r_nexp), dtype=g_fluxerr.dtype)
     comb_flag = np.zeros((len(unique_ids), g_nexp + r_nexp), dtype=g_flag.dtype)
+
+    del g_jd, r_jd, g_bjd, r_bjd, g_filterid, r_filterid
+    del g_exptime, r_exptime, g_pid, r_pid, g_field, r_field
+    del g_ccd, r_ccd, g_quad, r_quad, g_imstat, r_imstat
+    del g_infobits, r_infobits, g_seeing, r_seeing
+    del g_mzpsci, r_mzpsci, g_mzpsciunc, r_mzpsciunc
+    del g_mzpscirms, r_mzpscirms, g_clrco, r_clrco
+    del g_clrcounc, r_clrcounc, g_maglim, r_maglim
+    del g_airmass, r_airmass, g_nps1matches, r_nps1matches
+    gc.collect()
 
     # Choose a progress interval to avoid logging every iteration
     total = len(unique_ids)
@@ -228,6 +260,14 @@ def merge_g_r(input_path, output_path, field, ccd, quad):
 
         if uid_idx % progress_interval == 0:
             LOG.info("merge_g_r progress field=%d ccd=%d quad=%d: %d/%d", field, ccd, quad, uid_idx, total)
+
+    del g_flux, g_fluxerr, g_flag, r_flux, r_fluxerr, r_flag
+    del g_ra, r_ra, g_dec, r_dec
+    del g_mag_ref, r_mag_ref, g_mag_err_ref, r_mag_err_ref
+    del g_objtype, r_objtype
+    del g_map, r_map
+    gc.collect()
+
     LOG.info("Finished combining sources; sorting exposures and building datasets")
 
     # Argsort everything by time
@@ -252,38 +292,40 @@ def merge_g_r(input_path, output_path, field, ccd, quad):
     comb_airmass_sorted = comb_airmass[sort_idx]
     comb_nps1matches_sorted = comb_nps1matches[sort_idx]
 
-    comb_ra_sorted = comb_ra[sort_idx]
-    comb_dec_sorted = comb_dec[sort_idx]
-    comb_mag_ref_sorted = comb_mag_ref[sort_idx]
-    comb_mag_err_ref_sorted = comb_mag_err_ref[sort_idx]
-    comb_objtype_sorted = comb_objtype[sort_idx]
-
     comb_flux_sorted = comb_flux[:, sort_idx]
     comb_fluxerr_sorted = comb_fluxerr[:, sort_idx]
     comb_flag_sorted = comb_flag[:, sort_idx]
 
+    del comb_jd, comb_bjd, comb_filterid, comb_exptime, comb_pid
+    del comb_field, comb_ccd, comb_quad, comb_imstat, comb_infobits
+    del comb_seeing, comb_mzpsci, comb_mzpsciunc, comb_mzpscirms
+    del comb_clrco, comb_clrcounc, comb_maglim, comb_airmass, comb_nps1matches
+    del comb_flux, comb_fluxerr, comb_flag
+    del sort_idx
+    gc.collect()
+
     # Write out the combined data to a new HDF5 file
     LOG.debug("Writing output file: %s", output_filename)
     exposures_dtype = np.dtype([
-        ("jd", g_jd.dtype),
-        ("bjd", g_bjd.dtype),
-        ("filterid", g_filterid.dtype),
-        ("exptime", g_exptime.dtype),
-        ("pid", g_pid.dtype),
-        ("field", g_field.dtype),
-        ("ccd", g_ccd.dtype),
-        ("quad", g_quad.dtype),
-        ("imstat", g_imstat.dtype),
-        ("infobits", g_infobits.dtype),
-        ("seeing", g_seeing.dtype),
-        ("mzpsci", g_mzpsci.dtype),
-        ("mzpsciunc", g_mzpsciunc.dtype),
-        ("mzpscirms", g_mzpscirms.dtype),
-        ("clrco", g_clrco.dtype),
-        ("clrcounc", g_clrcounc.dtype),
-        ("maglim", g_maglim.dtype),
-        ("airmass", g_airmass.dtype),
-        ("nps1matches", g_nps1matches.dtype)
+        ("jd", comb_jd_sorted.dtype),
+        ("bjd", comb_bjd_sorted.dtype),
+        ("filterid", comb_filterid_sorted.dtype),
+        ("exptime", comb_exptime_sorted.dtype),
+        ("pid", comb_pid_sorted.dtype),
+        ("field", comb_field_sorted.dtype),
+        ("ccd", comb_ccd_sorted.dtype),
+        ("quad", comb_quad_sorted.dtype),
+        ("imstat", comb_imstat_sorted.dtype),
+        ("infobits", comb_infobits_sorted.dtype),
+        ("seeing", comb_seeing_sorted.dtype),
+        ("mzpsci", comb_mzpsci_sorted.dtype),
+        ("mzpsciunc", comb_mzpsciunc_sorted.dtype),
+        ("mzpscirms", comb_mzpscirms_sorted.dtype),
+        ("clrco", comb_clrco_sorted.dtype),
+        ("clrcounc", comb_clrcounc_sorted.dtype),
+        ("maglim", comb_maglim_sorted.dtype),
+        ("airmass", comb_airmass_sorted.dtype),
+        ("nps1matches", comb_nps1matches_sorted.dtype)
     ])
     exposures_table = np.zeros(len(comb_bjd_sorted), dtype=exposures_dtype)
     exposures_table["jd"] = comb_jd_sorted
@@ -307,12 +349,12 @@ def merge_g_r(input_path, output_path, field, ccd, quad):
     exposures_table["nps1matches"] = comb_nps1matches_sorted
 
     sources_dtype = np.dtype([
-        ("gaia_id", g_psid.dtype),
-        ("ra", g_ra.dtype),
-        ("decl", g_dec.dtype),
-        ("mag_ref", g_mag_ref.dtype),
-        ("mag_err_ref", g_mag_err_ref.dtype),
-        ("objtype", g_objtype.dtype)
+        ("gaia_id", unique_ids.dtype),
+        ("ra", comb_ra.dtype),
+        ("decl", comb_dec.dtype),
+        ("mag_ref", comb_mag_ref.dtype),
+        ("mag_err_ref", comb_mag_err_ref.dtype),
+        ("objtype", comb_objtype.dtype)
     ])
     sources_table = np.zeros(len(unique_ids), dtype=sources_dtype)
     sources_table["gaia_id"] = unique_ids
@@ -339,6 +381,19 @@ def merge_g_r(input_path, output_path, field, ccd, quad):
         data_group.create_dataset("sources", data=sources_table, compression="gzip", compression_opts=1)
         data_group.create_dataset("exposures", data=exposures_table, compression="gzip", compression_opts=1)
         data_group.create_dataset("sourcedata", data=sourcedata_table, compression="gzip", compression_opts=1)
+
+    del comb_jd_sorted, comb_bjd_sorted, comb_filterid_sorted
+    del comb_exptime_sorted, comb_pid_sorted, comb_field_sorted
+    del comb_ccd_sorted, comb_quad_sorted, comb_imstat_sorted
+    del comb_infobits_sorted, comb_seeing_sorted, comb_mzpsci_sorted
+    del comb_mzpsciunc_sorted, comb_mzpscirms_sorted, comb_clrco_sorted
+    del comb_clrcounc_sorted, comb_maglim_sorted, comb_airmass_sorted
+    del comb_nps1matches_sorted
+    del comb_ra, comb_dec, comb_mag_ref, comb_mag_err_ref, comb_objtype
+    del comb_flux_sorted, comb_fluxerr_sorted, comb_flag_sorted
+    del exposures_table, sources_table, sourcedata_table
+    gc.collect()
+
     LOG.info("merge_g_r complete field=%d ccd=%d quad=%d written=%s", field, ccd, quad, output_filename)
 
 def merge_g_r_i(input_path, output_path, field, ccd, quad):
@@ -682,18 +737,54 @@ def which_function(input_path, field, ccd, quad):
     else:
         return None
 
+# def process_file(input_path, output_path, field, ccd, quad):
+#     print(f"Processing field {field}, ccd {ccd}, quad {quad} on thread {threading.get_ident()}")
+#     func = which_function(input_path, field, ccd, quad)
+#     if func:
+#         try:
+#             func(input_path, output_path, field, ccd, quad)
+#             print(f"Completed processing for field {field}, ccd {ccd}, quad {quad}.")
+#         except Exception as e:
+#             # Log error and continue other tasks
+#             print(f"Error processing field {field}, ccd {ccd}, quad {quad}: {e}", file=sys.stderr)
+#     else:
+#         print(f"No g or r files found for field {field}, ccd {ccd}, quad {quad}. Skipping.")
+
 def process_file(input_path, output_path, field, ccd, quad):
-    print(f"Processing field {field}, ccd {ccd}, quad {quad} on thread {threading.get_ident()}")
-    func = which_function(input_path, field, ccd, quad)
-    if func:
-        try:
-            func(input_path, output_path, field, ccd, quad)
-            print(f"Completed processing for field {field}, ccd {ccd}, quad {quad}.")
-        except Exception as e:
-            # Log error and continue other tasks
-            print(f"Error processing field {field}, ccd {ccd}, quad {quad}: {e}", file=sys.stderr)
-    else:
-        print(f"No g or r files found for field {field}, ccd {ccd}, quad {quad}. Skipping.")
+    """
+    Wrapper with comprehensive error handling to prevent worker crashes.
+    """
+    try:
+        print(f"Processing field {field}, ccd {ccd}, quad {quad} on process {os.getpid()}")
+        func = which_function(input_path, field, ccd, quad)
+        if func:
+            try:
+                func(input_path, output_path, field, ccd, quad)
+                print(f"Completed processing for field {field}, ccd {ccd}, quad {quad}.")
+                return True
+            except MemoryError as e:
+                LOG.error(f"MemoryError processing field {field}, ccd {ccd}, quad {quad}: {e}")
+                print(f"MemoryError processing field {field}, ccd {ccd}, quad {quad}: {e}", file=sys.stderr)
+                return False
+            except OSError as e:
+                LOG.error(f"OSError (file/resource issue) processing field {field}, ccd {ccd}, quad {quad}: {e}")
+                print(f"OSError processing field {field}, ccd {ccd}, quad {quad}: {e}", file=sys.stderr)
+                return False
+            except Exception as e:
+                # Catch ALL exceptions to prevent process crash
+                LOG.error(f"Unexpected error processing field {field}, ccd {ccd}, quad {quad}: {e}", exc_info=True)
+                print(f"Error processing field {field}, ccd {ccd}, quad {quad}: {e}", file=sys.stderr)
+                import traceback
+                traceback.print_exc()
+                return False
+        else:
+            print(f"No g or r files found for field {field}, ccd {ccd}, quad {quad}. Skipping.")
+            return True
+    except Exception as e:
+        # Ultimate safety net - log and return False instead of crashing
+        LOG.error(f"Critical error in process_file wrapper for field {field}, ccd {ccd}, quad {quad}: {e}", exc_info=True)
+        print(f"CRITICAL: Unexpected error in process_file for field {field}, ccd {ccd}, quad {quad}: {e}", file=sys.stderr)
+        return False
 
 def process_field(input_path, output_path, field, n_threads=4):
     """
@@ -770,26 +861,69 @@ def process_all_fields(input_path, output_path, n_threads=4):
             raise
 
 
+# def process_subset_fields(input_path, output_path, lower_field, upper_field, n_threads=4):
+#     """
+#     Process fields in the inclusive range [lower_field, upper_field].
+#     For each field submit CCD/quad tasks in parallel (up to n_threads) and wait for
+#     that field's tasks to finish before moving to the next field.
+#     """
+#     fields = np.arange(lower_field, upper_field + 1)
+#     ctx = multiprocessing.get_context("spawn")
+#     with ProcessPoolExecutor(max_workers=n_threads, mp_context=ctx) as executor:
+#         try:
+#             for field in fields:
+#                 LOG.info("Starting work for field %d", int(field))
+#                 futures = []
+#                 for ccd in range(1, 17):
+#                     for quad in range(1, 5):
+#                         futures.append(executor.submit(process_file, input_path, output_path, int(field), ccd, quad))
+
+#                 try:
+#                     for future in as_completed(futures):
+#                         future.result()
+#                 except KeyboardInterrupt:
+#                     print("KeyboardInterrupt received — cancelling remaining tasks for current field and shutting down workers...", file=sys.stderr)
+#                     for f in futures:
+#                         try:
+#                             f.cancel()
+#                         except Exception:
+#                             pass
+#                     executor.shutdown(wait=False)
+#                     raise
+#                 LOG.info("Completed all tasks for field %d", int(field))
+#         except KeyboardInterrupt:
+#             print("KeyboardInterrupt received — aborting subset processing.", file=sys.stderr)
+#             raise
+
 def process_subset_fields(input_path, output_path, lower_field, upper_field, n_threads=4):
-    """
-    Process fields in the inclusive range [lower_field, upper_field].
-    For each field submit CCD/quad tasks in parallel (up to n_threads) and wait for
-    that field's tasks to finish before moving to the next field.
-    """
     fields = np.arange(lower_field, upper_field + 1)
     ctx = multiprocessing.get_context("spawn")
+    
+    failed_tasks = []
+    
     with ProcessPoolExecutor(max_workers=n_threads, mp_context=ctx) as executor:
         try:
             for field in fields:
                 LOG.info("Starting work for field %d", int(field))
-                futures = []
+                futures = {}  # Use dict to track which future is which task
                 for ccd in range(1, 17):
                     for quad in range(1, 5):
-                        futures.append(executor.submit(process_file, input_path, output_path, int(field), ccd, quad))
+                        future = executor.submit(process_file, input_path, output_path, int(field), ccd, quad)
+                        futures[future] = (int(field), ccd, quad)
 
                 try:
                     for future in as_completed(futures):
-                        future.result()
+                        task_info = futures[future]
+                        try:
+                            result = future.result()
+                            if not result:
+                                failed_tasks.append(task_info)
+                                LOG.warning(f"Task failed: field={task_info[0]} ccd={task_info[1]} quad={task_info[2]}")
+                        except Exception as e:
+                            failed_tasks.append(task_info)
+                            LOG.error(f"Exception from task field={task_info[0]} ccd={task_info[1]} quad={task_info[2]}: {e}")
+                            # Don't re-raise - continue processing other tasks
+                            
                 except KeyboardInterrupt:
                     print("KeyboardInterrupt received — cancelling remaining tasks for current field and shutting down workers...", file=sys.stderr)
                     for f in futures:
@@ -803,6 +937,14 @@ def process_subset_fields(input_path, output_path, lower_field, upper_field, n_t
         except KeyboardInterrupt:
             print("KeyboardInterrupt received — aborting subset processing.", file=sys.stderr)
             raise
+        finally:
+            if failed_tasks:
+                LOG.warning(f"Total failed tasks: {len(failed_tasks)}")
+                print(f"\n{'='*60}")
+                print(f"WARNING: {len(failed_tasks)} tasks failed:")
+                for field, ccd, quad in failed_tasks:
+                    print(f"  - field={field} ccd={ccd} quad={quad}")
+                print(f"{'='*60}\n")
 
 def clamp_n_threads(n):
     try:
